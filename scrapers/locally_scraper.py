@@ -98,8 +98,6 @@ class LocallyScraper:
         
         # Debug: Log general products URLs
         logger.info(f"Processing {len(general_products)} general products from page {page}")
-        for i, product in enumerate(general_products[:3]):  # Log first 3 products
-            logger.info(f"  Product {i+1}: ID={product.external_id}, URL={product.url}")
         
         product_urls = [urljoin(self.page_scraper.base_url, p.url) for p in general_products if p.url]
         
@@ -129,9 +127,7 @@ class LocallyScraper:
                     merged_product = self._merge_product_data(general_product, detailed_product)
                     merged_product['page_number'] = page
                     
-                    if merged_product['variants']:
-                        logger.info(f"  ✅ Product {merged_product['external_id']}: {len(merged_product['variants'])} variants found")
-                    else:
+                    if not merged_product['variants']:
                         logger.warning(f"  ⚠️ Product {merged_product['external_id']}: No variants found")
                     
                     unified_products.append(merged_product)
