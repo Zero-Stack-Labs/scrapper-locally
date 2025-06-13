@@ -7,9 +7,9 @@ from .product_scraper import ProductScraper
 from models.product import Product
 from models.variant import Variant
 from pathlib import Path
-import logging
+from utils.logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 class LocallyScraper:
     
@@ -102,8 +102,6 @@ class LocallyScraper:
         product_urls = [urljoin(self.page_scraper.base_url, p.url) for p in general_products if p.url]
         
         logger.info(f"Generated {len(product_urls)} product URLs for detailed scraping")
-        if product_urls:
-            logger.info(f"Sample URLs: {product_urls[:2]}")  # Log first 2 URLs
         
         if product_urls:
             self.product_scraper.initialize_location(

@@ -1,8 +1,8 @@
 from typing import List, Dict, Any
 from scrapers.locally_scraper import LocallyScraper
-import logging
+from utils.logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 class ScraperRepository:
     

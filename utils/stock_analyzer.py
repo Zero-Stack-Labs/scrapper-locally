@@ -1,31 +1,32 @@
-"""Stock analyzer for multi-location product availability."""
-
 import json
 import csv
 from typing import List, Dict, Set
 from collections import defaultdict
 from pathlib import Path
 import pandas as pd
-import logging
+from dotenv import load_dotenv
+import os
+from models.product import Product
+from repositories.product_repository import ProductRepository
+from utils.logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+load_dotenv()
+logger = get_logger(__name__)
 
 class StockAnalyzer:
-    """Analyze product stock availability across multiple locations."""
     
-    def __init__(self, output_dir: str = "."):
-        """Initialize the stock analyzer."""
+    def __init__(self, output_dir: str = ".", enable_db_upsert: bool = True):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.enable_db_upsert = enable_db_upsert
+        
+        if self.enable_db_upsert:
+            self.product_repository = ProductRepository()
+            logger.info("StockAnalyzer inicializado con upsert automático habilitado")
+        else:
+            self.product_repository = None
     
     def generate_stock_analysis_files(self, all_products: List[Dict], store_configurations: List[Dict]):
-        """
-        Generate products_in_stock and products_out_stock files based on availability across all locations.
-        
-        Args:
-            all_products: List of all products from all locations
-            store_configurations: List of store configuration dictionaries
-        """
         if not all_products:
             return
 
@@ -34,27 +35,17 @@ class StockAnalyzer:
         logger.info(f"--- Analyzing stock across {len(store_configurations)} locations ---")
         logger.info(f"Analyzing availability for zipcodes: {sorted(list(all_zipcodes))}")
         
-        # Group products by external_id and analyze availability
         product_availability = self._analyze_product_availability(all_products, all_zipcodes)
         
-        # Separate products into in_stock and out_stock
-        products_in_stock, products_out_stock = self._categorize_products(product_availability, all_zipcodes)
+        unified_products = self._create_unified_products(product_availability, all_zipcodes)
         
-        # Generate files
-        self._save_stock_files(products_in_stock, products_out_stock)
+        self._save_unified_stock_file(unified_products)
         
-        # Print statistics
-        self._print_stock_statistics(products_in_stock, products_out_stock, all_zipcodes)
+        logger.info(f"Stock analysis completed: {len(unified_products)} products processed")
     
     def _analyze_product_availability(self, all_products: List[Dict], all_zipcodes: Set[str]) -> Dict:
-        """
-        Analyze product availability across all locations.
-        
-        Returns:
-            Dict mapping external_id to availability information
-        """
         product_availability = defaultdict(lambda: {
-            'locations': {},  # zipcode -> product_data
+            'locations': {},
             'available_zipcodes': set(),
             'in_stock_zipcodes': set(),
             'product_info': None
@@ -67,29 +58,23 @@ class StockAnalyzer:
             if not external_id or not zipcode:
                 continue
             
-            # Store product data for this location
             product_availability[external_id]['locations'][zipcode] = product
             product_availability[external_id]['available_zipcodes'].add(zipcode)
             
-            # Store general product info (use first occurrence)
             if not product_availability[external_id]['product_info']:
                 product_availability[external_id]['product_info'] = product
             
-            # Check if product has in-stock variants in this location
             if self._has_in_stock_variants(product):
                 product_availability[external_id]['in_stock_zipcodes'].add(zipcode)
         
         return dict(product_availability)
     
     def _has_in_stock_variants(self, product: Dict) -> bool:
-        """Check if a product has any in-stock variants."""
         variants = product.get('variants', [])
         
         if not variants:
-            # If no variants, check general stock status or assume available if price exists
             return product.get('external_sell_price', 0) > 0
         
-        # Check if any variant is in stock
         for variant in variants:
             stock_status = variant.get('stock_status', '').lower()
             if stock_status in ['in stock', 'available', 'in_stock']:
@@ -97,31 +82,20 @@ class StockAnalyzer:
         
         return False
     
-    def _categorize_products(self, product_availability: Dict, all_zipcodes: Set[str]) -> tuple:
-        """
-        Categorize products into in_stock and out_stock based on availability across all locations.
-        
-        Returns:
-            Tuple of (products_in_stock, products_out_stock)
-        """
-        products_in_stock = []
-        products_out_stock = []
+    def _create_unified_products(self, product_availability: Dict, all_zipcodes: Set[str]) -> List[Dict]:
+        unified_products = []
         
         for external_id, availability_info in product_availability.items():
             available_zipcodes = availability_info['available_zipcodes']
             in_stock_zipcodes = availability_info['in_stock_zipcodes']
             
-            # Product is "in_stock" if:
-            # 1. It appears in ALL configured locations
-            # 2. It has in-stock variants in ALL locations where it appears
             is_in_all_locations = available_zipcodes == all_zipcodes
             is_in_stock_everywhere = in_stock_zipcodes == available_zipcodes
             
+            product_data = availability_info['product_info'].copy()
+            
             if is_in_all_locations and is_in_stock_everywhere:
-                # Product is available and in stock in ALL locations
-                product_data = availability_info['product_info'].copy()
-                
-                # Add availability summary
+                product_data['stock_status'] = 'in_stock'
                 product_data['availability_summary'] = {
                     'available_in_locations': len(available_zipcodes),
                     'total_locations': len(all_zipcodes),
@@ -129,13 +103,9 @@ class StockAnalyzer:
                     'available_zipcodes': sorted(list(available_zipcodes)),
                     'in_stock_zipcodes': sorted(list(in_stock_zipcodes))
                 }
-                
-                products_in_stock.append(product_data)
             else:
-                # Product is NOT available in all locations or not in stock everywhere
-                product_data = availability_info['product_info'].copy()
+                product_data['stock_status'] = 'out_of_stock'
                 
-                # Add availability summary with reason for being out of stock
                 out_of_stock_reasons = []
                 if not is_in_all_locations:
                     missing_locations = all_zipcodes - available_zipcodes
@@ -154,24 +124,107 @@ class StockAnalyzer:
                     'in_stock_zipcodes': sorted(list(in_stock_zipcodes)),
                     'out_of_stock_reasons': out_of_stock_reasons
                 }
-                
-                products_out_stock.append(product_data)
+            
+            unified_products.append(product_data)
         
-        return products_in_stock, products_out_stock
+        return unified_products
     
-    def _save_stock_files(self, products_in_stock: List[Dict], products_out_stock: List[Dict]):
-        """Save the in_stock and out_stock files in both JSON and CSV formats."""
+    def _save_unified_stock_file(self, unified_products: List[Dict]):
+        self._save_json_file(unified_products, "products_stock_analysis.json")
+        self._save_csv_file(unified_products, "products_stock_analysis.csv")
         
-        # Save products_in_stock files
-        self._save_json_file(products_in_stock, "products_in_stock.json")
-        self._save_csv_file(products_in_stock, "products_in_stock.csv")
+        in_stock_products = [p for p in unified_products if p.get('stock_status') == 'in_stock']
+        out_of_stock_products = [p for p in unified_products if p.get('stock_status') == 'out_of_stock']
         
-        # Save products_out_stock files
-        self._save_json_file(products_out_stock, "products_out_stock.json")
-        self._save_csv_file(products_out_stock, "products_out_stock.csv")
+        self._save_json_file(in_stock_products, "products_in_stock.json")
+        self._save_csv_file(in_stock_products, "products_in_stock.csv")
+        
+        self._save_json_file(out_of_stock_products, "products_out_of_stock.json")
+        self._save_csv_file(out_of_stock_products, "products_out_of_stock.csv")
+        
+        if self.enable_db_upsert and self.product_repository:
+            db_results = self._upsert_products_to_db(unified_products)
+            if not db_results.get('skipped'):
+                logger.info(f"DB upsert: {db_results['successful_upserts']} exitosos, {db_results['failed_upserts']} fallidos")
+    
+    def _upsert_products_to_db(self, products: List[Dict]) -> Dict:
+        if not self.enable_db_upsert or not self.product_repository:
+            return {"skipped": True, "reason": "DB upsert disabled"}
+        
+        results = {
+            'successful_upserts': 0,
+            'failed_upserts': 0,
+            'errors': []
+        }
+        
+        logger.info(f"Iniciando upsert de {len(products)} productos a la base de datos")
+        
+        for product_dict in products:
+            try:
+                product = self._dict_to_product(product_dict)
+                if product:
+                    self.product_repository.upsert_product(product)
+                    results['successful_upserts'] += 1
+                else:
+                    results['failed_upserts'] += 1
+                    results['errors'].append("No se pudo convertir producto a objeto Product")
+            except Exception as e:
+                error_msg = f"Error en upsert: {e}"
+                logger.error(error_msg)
+                results['failed_upserts'] += 1
+                results['errors'].append(error_msg)
+        
+        logger.info(f"Upsert completado: {results['successful_upserts']} exitosos, {results['failed_upserts']} fallidos")
+        return results
+    
+    def _dict_to_product(self, data: Dict) -> Product:
+        try:
+            external_id = data.get('external_id', '')
+            name = data.get('name', '')
+            brand = data.get('brand', '')
+            
+            if not external_id or not name:
+                logger.warning(f"Producto incompleto, falta external_id o name")
+                return None
+            
+            product = Product(external_id=external_id, name=name, brand=brand)
+            
+            product.provider_id = data.get('provider_id', 'www.locally.com')
+            product.url = data.get('url', '')
+            product.sku = data.get('sku', '')
+            product.external_sell_price = float(data.get('external_sell_price', 0))
+            product.currency = data.get('currency', '')
+            product.condition = data.get('condition', '')
+            product.description = data.get('description', '')
+            product.page_number = data.get('page_number')
+            product.store_id = data.get('store_id', '')
+            product.lat = float(data.get('lat', 0))
+            product.lng = float(data.get('lng', 0))
+            product.zipcode = data.get('zipcode', '')
+            product.store_name = data.get('store_name', '')
+            
+            if 'images' in data:
+                if isinstance(data['images'], str):
+                    product.images = data['images'].split('|') if data['images'] else []
+                elif isinstance(data['images'], list):
+                    product.images = data['images']
+            
+            if 'variants' in data:
+                if isinstance(data['variants'], str):
+                    try:
+                        product.variants = json.loads(data['variants'])
+                    except json.JSONDecodeError:
+                        product.variants = []
+                elif isinstance(data['variants'], list):
+                    product.variants = data['variants']
+            
+            return product
+            
+        except Exception as e:
+            logger.error(f"Error convirtiendo datos a Product: {e}")
+            return None
     
     def _save_json_file(self, products: List[Dict], filename: str):
-        """Save products to JSON file."""
         file_path = self.output_dir / filename
         
         with open(file_path, 'w', encoding='utf-8') as f:
@@ -180,24 +233,20 @@ class StockAnalyzer:
         logger.info(f"✅ Saved {filename} ({len(products)} products)")
     
     def _save_csv_file(self, products: List[Dict], filename: str):
-        """Save products to CSV file."""
         if not products:
             return
         
         file_path = self.output_dir / filename
         
-        # Prepare CSV data
         csv_products = []
         for product in products:
             csv_product = self._prepare_product_for_csv(product)
             csv_products.append(csv_product)
         
-        # Get all unique fields
         all_fields = set()
         for product in csv_products:
             all_fields.update(product.keys())
         
-        # Sort fields for consistent output
         fieldnames = sorted(list(all_fields))
         
         with open(file_path, 'w', newline='', encoding='utf-8') as f:
@@ -208,52 +257,18 @@ class StockAnalyzer:
         logger.info(f"✅ Saved {filename} ({len(products)} products)")
     
     def _prepare_product_for_csv(self, product: Dict) -> Dict:
-        """Prepare a product dictionary for CSV export."""
         csv_product = product.copy()
         
-        # Convert lists to pipe-separated strings
         if 'images' in csv_product and isinstance(csv_product['images'], list):
             csv_product['images_csv'] = '|'.join(csv_product['images'])
             del csv_product['images']
         
-        # Convert variants to JSON string
         if 'variants' in csv_product and isinstance(csv_product['variants'], list):
             csv_product['variants_json'] = json.dumps(csv_product['variants'], ensure_ascii=False)
             del csv_product['variants']
         
-        # Convert availability_summary to JSON string
         if 'availability_summary' in csv_product and isinstance(csv_product['availability_summary'], dict):
             csv_product['availability_summary_json'] = json.dumps(csv_product['availability_summary'], ensure_ascii=False)
             del csv_product['availability_summary']
         
-        return csv_product
-    
-    def _print_stock_statistics(self, products_in_stock: List[Dict], products_out_stock: List[Dict], all_zipcodes: Set[str]):
-        """Print statistics about the stock analysis."""
-        total_products = len(products_in_stock) + len(products_out_stock)
-        
-        logger.info("\n📈 STOCK ANALYSIS RESULTS")
-        logger.info("="*60)
-        logger.info(f"Total unique products analyzed: {total_products}")
-        logger.info(f"Products available in ALL {len(all_zipcodes)} locations: {len(products_in_stock)}")
-        logger.info(f"Products NOT available in all locations: {len(products_out_stock)}")
-        
-        if total_products > 0:
-            in_stock_percentage = (len(products_in_stock) / total_products) * 100
-            logger.info(f"Availability rate: {in_stock_percentage:.1f}%")
-        
-        logger.info(f"\nFiles generated:")
-        logger.info(f"  - products_in_stock.json ({len(products_in_stock)} products)")
-        logger.info(f"  - products_in_stock.csv")
-        logger.info(f"  - products_out_stock.json ({len(products_out_stock)} products)")
-        logger.info(f"  - products_out_stock.csv")
-        
-        logger.info("="*60) 
-
-    def analyze_stock_patterns(self, products: List[Dict]) -> Dict:
-        # ...
-        return {}
-
-    def analyze_availability_by_store(self, products: List[Dict]) -> Dict:
-        # ...
-        return {} 
+        return csv_product 

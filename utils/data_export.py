@@ -2,35 +2,31 @@
 
 import json
 import pandas as pd
-from typing import List, Dict
+import os
+from typing import List, Dict, Optional
 from pathlib import Path
 import logging
+from dotenv import load_dotenv
+from models.product import Product
+from repositories.product_repository import ProductRepository
 
+load_dotenv()
 logger = logging.getLogger(__name__)
 
 class DataExporter:
-    """Handles data export to various formats."""
-    
-    def __init__(self, output_dir: str = ".", filename_suffix: str = ""):
-        """
-        Initialize data exporter.
-        
-        Args:
-            output_dir: Directory to save files in
-            filename_suffix: Suffix to add to filenames (e.g., "85940_123")
-        """
+    def __init__(self, output_dir: str = ".", filename_suffix: str = "", enable_db_upsert: bool = True):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(exist_ok=True)
         self.filename_suffix = filename_suffix
+        self.enable_db_upsert = enable_db_upsert
+        
+        if self.enable_db_upsert:
+            self.product_repository = ProductRepository()
+            logger.info("DataExporter inicializado con upsert automático habilitado")
+        else:
+            self.product_repository = None
     
     def save_products_json(self, products: List[Dict], filename: str = "products.json"):
-        """
-        Save products to JSON file.
-        
-        Args:
-            products: List of product dictionaries
-            filename: Output filename
-        """
         filepath = self.output_dir / filename
         
         with open(filepath, 'w', encoding='utf-8') as f:
@@ -39,13 +35,6 @@ class DataExporter:
         logger.info(f"Saved {len(products)} products to {filepath}")
     
     def save_products_csv(self, products: List[Dict], filename: str = "products.csv"):
-        """
-        Save products to CSV file with optimized structure.
-        
-        Args:
-            products: List of product dictionaries
-            filename: Output filename
-        """
         if not products:
             logger.warning(f"No products to save to {filename}")
             return
@@ -60,78 +49,142 @@ class DataExporter:
         
         logger.info(f"Saved {len(products)} products to {filepath}")
     
+    def _dict_to_product(self, data: Dict) -> Optional[Product]:
+        try:
+            external_id = data.get('external_id', '')
+            name = data.get('name', '')
+            brand = data.get('brand', '')
+            
+            if not external_id or not name:
+                logger.warning(f"Producto incompleto, falta external_id o name")
+                return None
+            
+            product = Product(external_id=external_id, name=name, brand=brand)
+            
+            product.provider_id = data.get('provider_id', 'www.locally.com')
+            product.url = data.get('url', '')
+            product.sku = data.get('sku', '')
+            product.external_sell_price = float(data.get('external_sell_price', 0))
+            product.currency = data.get('currency', '')
+            product.condition = data.get('condition', '')
+            product.description = data.get('description', '')
+            product.page_number = data.get('page_number')
+            product.store_id = data.get('store_id', '')
+            product.lat = float(data.get('lat', 0))
+            product.lng = float(data.get('lng', 0))
+            product.zipcode = data.get('zipcode', '')
+            product.store_name = data.get('store_name', '')
+            
+            if 'images' in data:
+                if isinstance(data['images'], str):
+                    product.images = data['images'].split('|') if data['images'] else []
+                elif isinstance(data['images'], list):
+                    product.images = data['images']
+            
+            if 'variants' in data:
+                if isinstance(data['variants'], str):
+                    try:
+                        product.variants = json.loads(data['variants'])
+                    except json.JSONDecodeError:
+                        product.variants = []
+                elif isinstance(data['variants'], list):
+                    product.variants = data['variants']
+            
+            return product
+            
+        except Exception as e:
+            logger.error(f"Error convirtiendo datos a Product: {e}")
+            return None
+    
+    def _upsert_products_to_db(self, products: List[Dict]) -> Dict:
+        """
+        Hace upsert de productos a la base de datos
+        """
+        if not self.enable_db_upsert or not self.product_repository:
+            return {"skipped": True, "reason": "DB upsert disabled"}
+        
+        results = {
+            'successful_upserts': 0,
+            'failed_upserts': 0,
+            'errors': []
+        }
+        
+        logger.info(f"Iniciando upsert de {len(products)} productos a la base de datos")
+        
+        for product_dict in products:
+            try:
+                product = self._dict_to_product(product_dict)
+                if product:
+                    self.product_repository.upsert_product(product)
+                    results['successful_upserts'] += 1
+                else:
+                    results['failed_upserts'] += 1
+                    results['errors'].append("No se pudo convertir producto a objeto Product")
+            except Exception as e:
+                error_msg = f"Error en upsert: {e}"
+                logger.error(error_msg)
+                results['failed_upserts'] += 1
+                results['errors'].append(error_msg)
+        
+        logger.info(f"Upsert completado: {results['successful_upserts']} exitosos, {results['failed_upserts']} fallidos")
+        return results
+    
     def save_unified_products(self, products: List[Dict]):
-        """Save unified products (general + detailed data combined)."""
         if not products:
             return
         
         logger.info(f"Saving {len(products)} unified products...")
         
-        # Generate filenames with suffix
         json_filename = f"products_{self.filename_suffix}.json" if self.filename_suffix else "products.json"
         csv_filename = f"products_{self.filename_suffix}.csv" if self.filename_suffix else "products.csv"
         
-        # Save JSON with full structure
         self.save_products_json(products, json_filename)
         
-        # Prepare CSV-optimized data
         csv_products = [self._convert_for_csv(p) for p in products]
         
-        # Save CSV
         self.save_products_csv(csv_products, csv_filename)
         
         logger.info("Unified products saved successfully")
     
     def save_general_products(self, products: List[Dict]):
-        """Save general product summaries (from listing pages)."""
         if not products:
             return
         
         logger.info(f"Saving {len(products)} general products...")
         
-        # Save JSON
         self.save_products_json(products, "products_general.json")
         
-        # Save CSV  
         self.save_products_csv(products, "products_general.csv")
         
         logger.info("General products saved successfully")
     
     def save_detailed_products(self, products: List[Dict]):
-        """Save detailed products with variants as JSON in product."""
         if not products:
             return
         
         logger.info(f"Saving {len(products)} detailed products...")
         
-        # Save complete JSON structure
         self.save_products_json(products, "products_details.json")
         
-        # Prepare CSV-optimized data
         csv_products = []
         for product in products:
-            # Use the to_dict_for_csv method if available, otherwise convert manually
             if hasattr(product, 'to_dict_for_csv'):
                 csv_product = product.to_dict_for_csv()
             else:
                 csv_product = self._convert_for_csv(product)
             csv_products.append(csv_product)
         
-        # Save CSV
         self.save_products_csv(csv_products, "products_details.csv")
         
         logger.info("Detailed products saved successfully")
     
     def _convert_for_csv(self, product: Dict) -> Dict:
-        """Convert product dictionary for CSV export."""
         csv_product = product.copy()
         
-        # Convert images list to pipe-separated string
         if 'images' in csv_product and isinstance(csv_product['images'], list):
             csv_product['images_csv'] = '|'.join(csv_product['images'])
             del csv_product['images']
         
-        # Convert variants list to JSON string for CSV
         if 'variants' in csv_product and isinstance(csv_product['variants'], list):
             csv_product['variants_json'] = json.dumps(csv_product['variants'], ensure_ascii=False)
             del csv_product['variants']
@@ -139,7 +192,6 @@ class DataExporter:
         return csv_product
     
     def print_unified_statistics(self, products: List[Dict]):
-        """Print statistics for unified products."""
         logger.info("--- UNIFIED SCRAPING STATISTICS ---")
         if not products:
             logger.info("No products to analyze.")
@@ -160,7 +212,6 @@ class DataExporter:
         logger.info("------------------------------------")
     
     def print_statistics(self, general_products: List[Dict], detailed_products: List[Dict]):
-        """Print statistics of scraped products."""
         logger.info("\n" + "="*50)
         logger.info("SCRAPING STATISTICS")
         logger.info("="*50)

@@ -5,9 +5,9 @@ from typing import List, Optional, Dict
 from bs4 import BeautifulSoup
 from .base_scraper import BaseScraper
 from models.product import Product
-import logging
+from utils.logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 class PageScraper(BaseScraper):
     

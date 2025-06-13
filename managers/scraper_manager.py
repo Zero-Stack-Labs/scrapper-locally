@@ -3,11 +3,11 @@ import uuid
 import threading
 from datetime import datetime
 from services.scraper_service import ScraperService
-import logging
 from pathlib import Path
 import json
+from utils.logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 class ScraperManager:
     def __init__(self, output_dir: str):

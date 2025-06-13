@@ -1,6 +1,5 @@
 import json
 import re
-import logging
 from typing import List, Dict, Optional
 from urllib.parse import urljoin
 from bs4 import BeautifulSoup
@@ -8,8 +7,9 @@ from bs4 import BeautifulSoup
 from .base_scraper import BaseScraper
 from models.product import Product
 from models.variant import Variant
+from utils.logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 class ProductScraper(BaseScraper):
     
@@ -591,9 +591,6 @@ class ProductScraper(BaseScraper):
         failed_urls = []
         
         logger.info(f"Getting details for {len(product_urls)} products (max {max_workers} workers)...")
-        
-        if product_urls:
-            logger.debug(f"Sample URLs: {product_urls[:3]}")
         
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_url = {

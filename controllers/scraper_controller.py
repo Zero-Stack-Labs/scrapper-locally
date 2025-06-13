@@ -2,11 +2,9 @@ from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pathlib import Path
 from managers.scraper_manager import ScraperManager
 from api_requests.scrape_request import ScrapeRequest
-import logging
+from utils.logging_config import get_logger
 
-# Configurar logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 class ScraperController:
     

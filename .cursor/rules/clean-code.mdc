@@ -1,0 +1,43 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Clean Code Rules
+- Write clean, readable, and maintainable code
+- Use descriptive variable and function names
+- Keep functions small and focused on a single responsibility
+- Avoid deep nesting - prefer early returns and guard clauses
+- No magic numbers - use named constants
+- Follow consistent naming conventions
+- Remove dead code and unused imports
+- Prefer composition over inheritance
+- Write pure functions when possible
+- Avoid global variables
+
+# Code Style
+- Use consistent indentation and formatting
+- Keep line length reasonable (80-120 characters)
+- Group related code together
+- Separate concerns clearly
+- Use whitespace effectively for readability
+
+# No Comments Policy
+- Never add comments unless explicitly requested
+- Write self-documenting code
+- Use meaningful names instead of explanatory comments
+- Focus on "what" the code does through clear naming
+- Avoid TODO, FIXME, or explanatory comments
+
+# Error Handling
+- Handle errors gracefully
+- Use specific error types
+- Fail fast when appropriate
+- Don't ignore exceptions
+
+# Performance & Best Practices
+- Avoid premature optimization
+- Use appropriate data structures
+- Minimize code duplication (DRY principle)
+- Follow language-specific best practices
+- Consider memory usage and performance implications
