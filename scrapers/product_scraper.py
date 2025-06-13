@@ -1,189 +1,188 @@
-"""Product detail scraper for individual product pages."""
-
-import json
-import re
-from typing import List, Dict, Optional
-from urllib.parse import urljoin
-from bs4 import BeautifulSoup
-
+from typing import List, Optional, Dict
 from .base_scraper import BaseScraper
 from models.product import Product
 from models.variant import Variant
+from bs4 import BeautifulSoup
+import re
+import json
+import requests
+import concurrent.futures
+import threading
+import logging
 
+logger = logging.getLogger(__name__)
 
 class ProductScraper(BaseScraper):
-    """Scraper for detailed product information."""
     
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def get_product_details(self, product_url: str) -> Optional[Product]:
+        try:
+            response = self.session.get(product_url, headers=self.headers)
+            if response.status_code == 200:
+                return self.parse_product_details_page(response.text, product_url)
+        except requests.RequestException as e:
+            logger.error(f"Error making request to {product_url}: {e}")
+        return None
     
-    def get_product_details_from_url(self, product_url: str) -> Optional[Product]:
-        """
-        Get details of a specific product from its URL.
+    def parse_product_details_page(self, html_content: str, product_url: str) -> Optional[Product]:
+        soup = BeautifulSoup(html_content, 'html.parser')
         
-        Args:
-            product_url: URL of the product page
-            
-        Returns:
-            Product object with detailed information or None if failed
-        """
-        if not product_url:
-            return None
+        canonical_link = soup.find('link', {'rel': 'canonical'})
+        canonical_url = canonical_link.get('href') if canonical_link else ""
         
+        external_id = ""
+        if canonical_url:
+            match = re.search(r'/product/(\d+)/', canonical_url)
+            if match:
+                external_id = match.group(1)
         
-        response = self.make_request(product_url)
-        
-        if response is None:
-            return None
-        
-        if response.status_code == 200:
-            return self.parse_product_details_page(response.text)
-        else:
-            print(f"Error getting product {product_url}: {response.status_code}")
-            return None
-    
-    def parse_product_details_page(self, html: str) -> Optional[Product]:
-        """
-        Parse the product details page to get structured information.
-        
-        Args:
-            html: HTML content of the product page
-            
-        Returns:
-            Product object with detailed information
-        """
-        soup = BeautifulSoup(html, 'html.parser')
-        
-        # Find product wrapper to get external_id
-        pdp_wrapper = soup.find('div', id='pdp-wrapper')
-        if not pdp_wrapper:
-            # Let's see what divs we do have
-            divs_with_ids = soup.find_all('div', id=True)
-            for div in divs_with_ids[:5]:  # Show first 5
-                pass
-            
-            # Check page title to see if it's actually a product page
-            title = soup.find('title')
-            if title:
-                pass
-            
-            return None
-        
-        details_container = soup.find('div', class_='pdp-product-details')
-        if not details_container:
-            details_container = soup
-        
-        external_id = pdp_wrapper.get('data-id') or details_container.get('data-switchlive-product-id')
         if not external_id:
             return None
         
-        # Extract basic product info
-        brand_elem = details_container.find('h5', class_='pdp-brand')
-        brand = brand_elem.get_text(strip=True) if brand_elem else ''
-        
-        name_elem = details_container.find('h3', class_='pdp-product-name')
-        name = name_elem.get_text(strip=True) if name_elem else ''
-        
+        name, brand, sku, images, price, currency = self._extract_complete_product_info_from_json_ld(soup)
         if not name:
             return None
         
-        # Check stock status before proceeding
-        stock_status = self._extract_stock_status_from_page(soup)
-        
-        # Create product object
         product = Product(external_id, name, brand)
-        
-        # Extract additional fields that were missing
-        product.url = self._extract_url_from_page(soup)
-        product.sku = self._extract_sku_from_page(soup)
-        product.currency = 'USD'  # Default currency for locally.com
-        
-        # Extract price from multiple sources
-        price = self._extract_price_from_page(soup, details_container)
+        product.url = product_url
+        product.sku = sku  # Establecer el SKU extraído de JSON-LD
+        product.images = images
         product.external_sell_price = price
+        product.currency = currency
         
         # Extract description from product information section
         description = self._extract_description_from_page(soup)
         product.description = description
         
-        # Extract images including variant images
-        images = self._extract_images_from_page(soup)
-        product.images = images
-        
-        # Extract comprehensive variants data
-        # Always pass the product SKU to variants (even if empty, variants will inherit it)
-        variants = self._extract_variants_from_page(soup, external_id, stock_status, product.sku)
-        
-        product.variants = variants
+        variants = self._extract_variants_from_html(soup, product)
+        for variant in variants:
+            variant.set_parent_info(product.external_id, product.sku)
+            fallback_image = product.images[0] if product.images else ""
+            product.add_variant(variant.to_dict(fallback_image=fallback_image))
         
         return product
-
-    def _extract_url_from_page(self, soup: BeautifulSoup) -> str:
-        """Extract the canonical URL from the page."""
-        # Try canonical link
-        canonical = soup.find('link', rel='canonical')
-        if canonical and canonical.get('href'):
-            return canonical['href']
+    
+    def get_product_details_batch(self, product_urls: List[str], max_workers: int = 5) -> List[Product]:
+        logger.info(f"Getting details for {len(product_urls)} products with {max_workers} workers...")
         
-        # Try from OpenGraph
-        og_url = soup.find('meta', property='og:url')
-        if og_url and og_url.get('content'):
-            return og_url['content']
+        local = threading.local()
         
-        return ''
-
-    def _extract_sku_from_page(self, soup: BeautifulSoup) -> str:
-        """Extract SKU from the page."""
-        # Try from JSON-LD structured data
-        json_scripts = soup.find_all('script', type='application/ld+json')
-        for script in json_scripts:
+        def process_url(url):
+            if not hasattr(local, 'session'):
+                local.session = requests.Session()
+                local.session.headers.update(self.headers)
+            
             try:
-                data = json.loads(script.string)
-                if isinstance(data, dict) and data.get('@type') == 'Product':
-                    sku = data.get('sku', '')
-                    if sku:
-                        return sku
-            except:
+                logger.debug(f"Processing URL: {url}")
+                response = local.session.get(url, headers=self.headers)
+                logger.debug(f"Response status for {url}: {response.status_code}")
+                
+                if response.status_code == 200:
+                    product = self.parse_product_details_page(response.text, url)
+                    if product:
+                        logger.debug(f"✅ Successfully parsed product {product.external_id} with {len(product.variants)} variants")
+                    else:
+                        logger.warning(f"⚠️ Failed to parse product from {url}")
+                    return product
+                else:
+                    logger.warning(f"❌ Non-200 status code {response.status_code} for {url}")
+            except Exception as exc:
+                logger.error(f'Error processing product {url}: {exc}')
+            return None
+        
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            results = list(executor.map(process_url, product_urls))
+        
+        detailed_products = [p for p in results if p is not None]
+        logger.info(f"Successfully scraped {len(detailed_products)}/{len(product_urls)} detailed products")
+        
+        # Log summary of variants
+        total_variants = sum(len(p.variants) for p in detailed_products)
+        if detailed_products:
+            logger.info(f"Total variants found: {total_variants}")
+            products_with_variants = sum(1 for p in detailed_products if len(p.variants) > 0)
+            logger.info(f"Products with variants: {products_with_variants}/{len(detailed_products)}")
+        
+        return detailed_products
+    
+    def _extract_complete_product_info_from_json_ld(self, soup: BeautifulSoup) -> tuple:
+        """Extract complete product info from JSON-LD scripts"""
+        for script in soup.find_all('script', {'type': 'application/ld+json'}):
+            try:
+                json_data = json.loads(script.string)
+                if isinstance(json_data, list):
+                    for item in json_data:
+                        if item.get('@type') == 'Product':
+                            name = item.get('name', '')
+                            brand_data = item.get('brand', {})
+                            brand = brand_data.get('name', '') if isinstance(brand_data, dict) else str(brand_data)
+                            sku = item.get('sku', '')
+                            
+                            # Extract images
+                            images = []
+                            image_data = item.get('image', [])
+                            if isinstance(image_data, str):
+                                images = [image_data]
+                            elif isinstance(image_data, list):
+                                images = image_data
+                            
+                            # Extract price and currency from offers
+                            price = 0.0
+                            currency = ""
+                            offers = item.get('offers', [])
+                            if offers:
+                                if isinstance(offers, list) and len(offers) > 0:
+                                    first_offer = offers[0]
+                                    try:
+                                        price = float(first_offer.get('price', 0))
+                                    except (ValueError, TypeError):
+                                        price = 0.0
+                                    currency = first_offer.get('priceCurrency', '')
+                                elif isinstance(offers, dict):
+                                    try:
+                                        price = float(offers.get('price', 0))
+                                    except (ValueError, TypeError):
+                                        price = 0.0
+                                    currency = offers.get('priceCurrency', '')
+                            
+                            return name, brand, sku, images, price, currency
+                elif json_data.get('@type') == 'Product':
+                    name = json_data.get('name', '')
+                    brand_data = json_data.get('brand', {})
+                    brand = brand_data.get('name', '') if isinstance(brand_data, dict) else str(brand_data)
+                    sku = json_data.get('sku', '')
+                    
+                    # Extract images
+                    images = []
+                    image_data = json_data.get('image', [])
+                    if isinstance(image_data, str):
+                        images = [image_data]
+                    elif isinstance(image_data, list):
+                        images = image_data
+                    
+                    # Extract price and currency from offers
+                    price = 0.0
+                    currency = ""
+                    offers = json_data.get('offers', [])
+                    if offers:
+                        if isinstance(offers, list) and len(offers) > 0:
+                            first_offer = offers[0]
+                            try:
+                                price = float(first_offer.get('price', 0))
+                            except (ValueError, TypeError):
+                                price = 0.0
+                            currency = first_offer.get('priceCurrency', '')
+                        elif isinstance(offers, dict):
+                            try:
+                                price = float(offers.get('price', 0))
+                            except (ValueError, TypeError):
+                                price = 0.0
+                            currency = offers.get('priceCurrency', '')
+                    
+                    return name, brand, sku, images, price, currency
+            except (json.JSONDecodeError, TypeError):
                 continue
-        
-        # Try from meta tags
-        sku_meta = soup.find('meta', attrs={'name': 'product:retailer_item_id'})
-        if sku_meta and sku_meta.get('content'):
-            return sku_meta['content']
-        
-        return ''
-
-    def _extract_price_from_page(self, soup: BeautifulSoup, details_container) -> float:
-        """Extract price from multiple possible sources in the page."""
-        # Try method 1: pdp-price-amount
-        price_elem = details_container.find('p', class_='pdp-price-amount')
-        if price_elem:
-            price = price_elem.get('data-bind-value')
-            try:
-                return float(price) if price else 0.0
-            except (ValueError, TypeError):
-                pass
-
-        # Try method 2: js-variant-price
-        price_elem = soup.find('span', class_='js-variant-price')
-        if price_elem:
-            try:
-                price_text = price_elem.get_text(strip=True)
-                return float(price_text) if price_text else 0.0
-            except (ValueError, TypeError):
-                pass
-
-        # Try method 3: Extract from data attributes
-        price_container = soup.find('span', class_='pdp-price')
-        if price_container:
-            price_min = price_container.get('data-price-min')
-            try:
-                return float(price_min) if price_min else 0.0
-            except (ValueError, TypeError):
-                pass
-
-        return 0.0
-
+        return "", "", "", [], 0.0, ""
+    
     def _extract_description_from_page(self, soup: BeautifulSoup) -> str:
         """Extract product description from the information section."""
         description_parts = []
@@ -199,65 +198,72 @@ class ProductScraper(BaseScraper):
             description_parts.append(short_desc.get_text(strip=True))
         
         return "\n".join(description_parts)
-
-
-    def _extract_images_from_page(self, soup: BeautifulSoup) -> List[str]:
-        """Extract all product images including variant images."""
-        images = set()
-        
-        # Main product image
-        main_img = soup.find('img', class_='pdp-image')
-        if main_img and main_img.get('src'):
-            images.add(urljoin(self.base_url, main_img['src']))
-        
-        # Variant images from alt image containers
-        alt_images = soup.find_all('a', class_='js-variant-alt')
-        for alt_img in alt_images:
-            img_src = alt_img.get('data-img-src')
-            if img_src:
-                images.add(urljoin(self.base_url, img_src))
-        
-        # Any other product images
-        all_imgs = soup.find_all('img')
-        for img in all_imgs:
-            src = img.get('src')
-            if src and ('/spec-' in src or 'media.locally.com' in src):
-                images.add(urljoin(self.base_url, src))
-        
-        return sorted(list(images))
     
-    def _extract_variants_from_page(self, soup: BeautifulSoup, product_id: str, stock_status: str, sku: str) -> List[Dict]:
+    def _extract_variants_from_html(self, soup: BeautifulSoup, product: Product) -> List[Variant]:
         """
         Extract comprehensive variant information from the product page.
         Completely dynamic approach - no hardcoded assumptions about attribute types.
-        
-        Args:
-            soup: BeautifulSoup object of the product page
-            product_id: Product external ID
-            stock_status: Stock status of the product
-            sku: SKU of the product
-            
-        Returns:
-            List of variant dictionaries
         """
+        stock_status = self._extract_stock_status_from_page(soup)
         
         # Method 1: Try JavaScript data (lclyPdpData) + dynamic form selectors
-        variants = self._extract_variants_from_javascript_data(soup, product_id, stock_status, sku)
+        variant_dicts = self._extract_variants_from_javascript_data(soup, product.external_id, stock_status, product.sku)
         
-        if not variants:
+        if not variant_dicts:
             # Method 2: Pure HTML extraction from form selectors and variant containers
-            variants = self._extract_variants_from_html_structure(soup, product_id, stock_status, sku)
+            variant_dicts = self._extract_variants_from_html_structure(soup, product.external_id, stock_status, product.sku)
         
-        if not variants:
+        if not variant_dicts:
             # Method 3: Create default variant
-            default_variant = self._create_default_variant(soup, product_id, stock_status, sku)
-            if default_variant:
-                variants = [default_variant]
+            default_variant_dict = self._create_default_variant(soup, product.external_id, stock_status, product.sku)
+            if default_variant_dict:
+                variant_dicts = [default_variant_dict]
         
         # Filter variants based on image availability
-        variants = self._filter_variants_by_image(variants)
+        variant_dicts = self._filter_variants_by_image(variant_dicts)
+        
+        # Convert dict variants to Variant objects
+        variants = []
+        for variant_dict in variant_dicts:
+            variant = Variant(
+                name=variant_dict.get('name', ''),
+                upc=variant_dict.get('upc', '')
+            )
+            variant.price = variant_dict.get('price', 0.0)
+            variant.stock_status = variant_dict.get('stock_status', 'unknown')
+            variant.image = variant_dict.get('image', '')
+            variant.set_attributes(variant_dict.get('attributes', {}))
+            variant.set_parent_info(product.external_id, product.sku)
+            variants.append(variant)
         
         return variants
+
+    def _extract_stock_status_from_page(self, soup: BeautifulSoup) -> str:
+        """Extract stock status from the product page."""
+        # Look for stock status banner
+        stock_banner = soup.find('div', class_='stock-status-banner')
+        if stock_banner:
+            status_text = stock_banner.get_text(strip=True).lower()
+            
+            if 'not in stock' in status_text:
+                return 'out_of_stock'
+            elif 'contact a dealer' in status_text:
+                return 'contact_dealer'
+            elif 'in stock' in status_text:
+                return 'in_stock'
+            else:
+                return 'unknown'
+        
+        # Look for other stock indicators
+        stock_indicators = soup.find_all(text=True)
+        for text in stock_indicators:
+            text_lower = text.strip().lower()
+            if 'in stock' in text_lower:
+                return 'in_stock'
+            elif 'out of stock' in text_lower:
+                return 'out_of_stock'
+        
+        return 'unknown'
 
     def _extract_variants_from_javascript_data(self, soup: BeautifulSoup, product_id: str, stock_status: str, sku: str) -> List[Dict]:
         """Extract variants using JavaScript lclyPdpData + dynamic form selectors."""
@@ -327,8 +333,6 @@ class ProductScraper(BaseScraper):
                 }
                 
                 variants.append(variant)
-                
-                # Debug output
         
         return variants
 
@@ -347,6 +351,40 @@ class ProductScraper(BaseScraper):
         
         return variants
 
+    def _extract_lcly_pdp_data(self, soup: BeautifulSoup) -> Optional[Dict]:
+        """Extract lclyPdpData from JavaScript."""
+        
+        # Find ALL script tags (with or without type attribute)
+        script_tags = soup.find_all('script')
+        
+        for i, script in enumerate(script_tags):
+            if script.string and 'lclyPdpData' in script.string:
+                script_content = script.string
+                
+                # Try multiple regex patterns to extract lclyPdpData
+                patterns = [
+                    r'var lclyPdpData = ({.*?});',  # Original pattern
+                    r'lclyPdpData = ({.*?});',      # Without var
+                    r'var lclyPdpData=({.*?});',    # No spaces
+                    r'lclyPdpData=({.*?});',        # No var, no spaces
+                ]
+                
+                for pattern in patterns:
+                    match = re.search(pattern, script_content, re.DOTALL)
+                    if match:
+                        try:
+                            lcly_data = json.loads(match.group(1))
+                            
+                            # Log what we found
+                            all_upcs = lcly_data.get('all_upcs_carried', [])
+                            upc_prices = lcly_data.get('upc_prices', {})
+                            
+                            return lcly_data
+                        except json.JSONDecodeError as e:
+                            continue
+        
+        return None 
+
     def _extract_dynamic_attribute_mappings(self, soup: BeautifulSoup) -> Dict[str, Dict[str, str]]:
         """
         Extract attribute mappings (UPC -> attribute value) for all available attributes.
@@ -362,7 +400,6 @@ class ProductScraper(BaseScraper):
             attr_name = self._determine_dynamic_attribute_name(select)
             if not attr_name:
                 continue
-            
             
             # Extract UPC mappings for this attribute
             upc_mapping = {}
@@ -421,14 +458,8 @@ class ProductScraper(BaseScraper):
         elif 'variant' in select_classes.lower():
             return 'Variant'
         
-        # Method 3: Look for associated labels
-        select_id = select.get('id', '')
-        if select_id:
-            label = soup.find('label', {'for': select_id})
-            if label:
-                label_text = label.get_text(strip=True)
-                if label_text:
-                    return label_text.replace(':', '').strip().title()
+        # Method 3: Look for associated labels (skip for now since we need soup)
+        # This would require the soup parameter which we don't have here
         
         # Method 4: Analyze option content to infer type
         options = select.find_all('option')
@@ -466,56 +497,6 @@ class ProductScraper(BaseScraper):
             price = 0.0
         return price
 
-    def _extract_lcly_pdp_data(self, soup: BeautifulSoup) -> Optional[Dict]:
-        """Extract lclyPdpData from JavaScript."""
-        
-        # Find ALL script tags (with or without type attribute)
-        script_tags = soup.find_all('script')
-        
-        
-        for i, script in enumerate(script_tags):
-            if script.string and 'lclyPdpData' in script.string:
-                script_content = script.string
-                
-                # Try multiple regex patterns to extract lclyPdpData
-                patterns = [
-                    r'var lclyPdpData = ({.*?});',  # Original pattern
-                    r'lclyPdpData = ({.*?});',      # Without var
-                    r'var lclyPdpData=({.*?});',    # No spaces
-                    r'lclyPdpData=({.*?});',        # No var, no spaces
-                ]
-                
-                for pattern in patterns:
-                    match = re.search(pattern, script_content, re.DOTALL)
-                    if match:
-                        try:
-                            lcly_data = json.loads(match.group(1))
-                            
-                            # Log what we found
-                            all_upcs = lcly_data.get('all_upcs_carried', [])
-                            upc_prices = lcly_data.get('upc_prices', {})
-                            
-                            if upc_prices:
-                                sample_upcs = list(upc_prices.keys())[:3]
-                            
-                            return lcly_data
-                        except json.JSONDecodeError as e:
-                            continue
-        
-        
-        # Let's also check what JavaScript content we actually have
-        js_with_content = [i for i, script in enumerate(script_tags) if script.string]
-        
-        # Look for any mention of relevant data
-        for i, script in enumerate(script_tags):
-            if script.string:
-                content = script.string.lower()
-                if any(keyword in content for keyword in ['upc', 'price', 'variant', 'pdp']):
-                    # Show a snippet
-                    snippet = script.string[:200] + "..." if len(script.string) > 200 else script.string
-        
-        return None
-
     def _extract_from_dynamic_selectors(self, soup: BeautifulSoup, product_id: str, base_price: float, stock_status: str, sku: str) -> List[Dict]:
         """
         Extract variants from any selectors dynamically, detecting attribute types automatically.
@@ -532,7 +513,6 @@ class ProductScraper(BaseScraper):
         all_upcs = set()
         for upc_mapping in attribute_mappings.values():
             all_upcs.update(upc_mapping.keys())
-        
         
         # Extract variant names from HTML
         upc_to_name = self._extract_variant_names_from_html(soup)
@@ -572,8 +552,6 @@ class ProductScraper(BaseScraper):
             }
             
             variants.append(variant)
-            
-            # Debug output
         
         return variants
 
@@ -701,68 +679,6 @@ class ProductScraper(BaseScraper):
         
         return variant
 
-    def get_product_details_batch(self, product_urls: List[str], max_workers: int = 5) -> List[Product]:
-        """
-        Get details for multiple products in parallel.
-        
-        Args:
-            product_urls: List of product URLs to scrape
-            max_workers: Maximum number of concurrent threads
-            
-        Returns:
-            List of Product objects with detailed information
-        """
-        import concurrent.futures
-        
-        detailed_products = []
-        
-        print(f"Getting details for {len(product_urls)} products (max {max_workers} workers)...")
-        
-        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_to_url = {
-                executor.submit(self.get_product_details_from_url, url): url
-                for url in product_urls
-            }
-            
-            for future in concurrent.futures.as_completed(future_to_url):
-                url = future_to_url[future]
-                try:
-                    product = future.result()
-                    if product:
-                        detailed_products.append(product)
-                except Exception as exc:
-                    print(f'Error processing product {url}: {exc}')
-        
-        print(f"Successfully scraped {len(detailed_products)}/{len(product_urls)} products")
-        return detailed_products
-
-    def _extract_stock_status_from_page(self, soup: BeautifulSoup) -> str:
-        """Extract stock status from the product page."""
-        # Look for stock status banner
-        stock_banner = soup.find('div', class_='stock-status-banner')
-        if stock_banner:
-            status_text = stock_banner.get_text(strip=True).lower()
-            
-            if 'not in stock' in status_text:
-                return 'out_of_stock'
-            elif 'contact a dealer' in status_text:
-                return 'contact_dealer'
-            elif 'in stock' in status_text:
-                return 'in_stock'
-            else:
-                return 'unknown'
-        
-        # Look for other stock indicators
-        stock_indicators = soup.find_all(text=True)
-        for text in stock_indicators:
-            text_lower = text.strip().lower()
-            if 'in stock' in text_lower:
-                return 'in_stock'
-            elif 'out of stock' in text_lower:
-                return 'out_of_stock'
-        
-        return 'unknown'
-
     def _detect_variant_stock_status(self, soup: BeautifulSoup, upc: str, attributes: Dict[str, str], default_stock_status: str) -> str:
         """
         Detect stock status for a specific variant based on UPC and attributes.
@@ -803,7 +719,7 @@ class ProductScraper(BaseScraper):
                         return 'out_of_stock'
         
         # Fallback: Use the general product stock status
-        return default_stock_status 
+        return default_stock_status
 
     def _generate_variant_name(self, product_name: str, attributes: Dict[str, str]) -> str:
         """
@@ -850,7 +766,7 @@ class ProductScraper(BaseScraper):
             if elem:
                 return elem.get_text(strip=True)
         
-        return "Product"  # Ultimate fallback 
+        return "Product"  # Ultimate fallback
 
     def _extract_variant_names_from_html(self, soup: BeautifulSoup) -> Dict[str, str]:
         """
@@ -882,7 +798,7 @@ class ProductScraper(BaseScraper):
                     if matches:
                         break
         
-        return upc_to_name 
+        return upc_to_name
 
     def _extract_variant_images_from_html(self, soup: BeautifulSoup) -> Dict[str, str]:
         """
@@ -937,7 +853,7 @@ class ProductScraper(BaseScraper):
                         if matches:
                             break
         
-        return upc_to_image 
+        return upc_to_image
 
     def _filter_variants_by_image(self, variants: List[Dict]) -> List[Dict]:
         """

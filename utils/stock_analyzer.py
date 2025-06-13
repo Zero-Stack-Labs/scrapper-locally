@@ -5,7 +5,10 @@ import csv
 from typing import List, Dict, Set
 from collections import defaultdict
 from pathlib import Path
+import pandas as pd
+import logging
 
+logger = logging.getLogger(__name__)
 
 class StockAnalyzer:
     """Analyze product stock availability across multiple locations."""
@@ -23,12 +26,13 @@ class StockAnalyzer:
             all_products: List of all products from all locations
             store_configurations: List of store configuration dictionaries
         """
-        print(f"\n📊 ANALYZING STOCK ACROSS {len(store_configurations)} LOCATIONS")
-        print("="*60)
-        
-        # Get all zipcodes from configurations
+        if not all_products:
+            return
+
         all_zipcodes = {config['zipcode'] for config in store_configurations}
-        print(f"Analyzing availability for zipcodes: {sorted(all_zipcodes)}")
+        
+        logger.info(f"--- Analyzing stock across {len(store_configurations)} locations ---")
+        logger.info(f"Analyzing availability for zipcodes: {sorted(list(all_zipcodes))}")
         
         # Group products by external_id and analyze availability
         product_availability = self._analyze_product_availability(all_products, all_zipcodes)
@@ -173,7 +177,7 @@ class StockAnalyzer:
         with open(file_path, 'w', encoding='utf-8') as f:
             json.dump(products, f, indent=2, ensure_ascii=False)
         
-        print(f"✅ Saved {filename} ({len(products)} products)")
+        logger.info(f"✅ Saved {filename} ({len(products)} products)")
     
     def _save_csv_file(self, products: List[Dict], filename: str):
         """Save products to CSV file."""
@@ -201,7 +205,7 @@ class StockAnalyzer:
             writer.writeheader()
             writer.writerows(csv_products)
         
-        print(f"✅ Saved {filename} ({len(products)} products)")
+        logger.info(f"✅ Saved {filename} ({len(products)} products)")
     
     def _prepare_product_for_csv(self, product: Dict) -> Dict:
         """Prepare a product dictionary for CSV export."""
@@ -228,20 +232,28 @@ class StockAnalyzer:
         """Print statistics about the stock analysis."""
         total_products = len(products_in_stock) + len(products_out_stock)
         
-        print(f"\n📈 STOCK ANALYSIS RESULTS")
-        print("="*60)
-        print(f"Total unique products analyzed: {total_products}")
-        print(f"Products available in ALL {len(all_zipcodes)} locations: {len(products_in_stock)}")
-        print(f"Products NOT available in all locations: {len(products_out_stock)}")
+        logger.info("\n📈 STOCK ANALYSIS RESULTS")
+        logger.info("="*60)
+        logger.info(f"Total unique products analyzed: {total_products}")
+        logger.info(f"Products available in ALL {len(all_zipcodes)} locations: {len(products_in_stock)}")
+        logger.info(f"Products NOT available in all locations: {len(products_out_stock)}")
         
         if total_products > 0:
             in_stock_percentage = (len(products_in_stock) / total_products) * 100
-            print(f"Availability rate: {in_stock_percentage:.1f}%")
+            logger.info(f"Availability rate: {in_stock_percentage:.1f}%")
         
-        print(f"\nFiles generated:")
-        print(f"  - products_in_stock.json ({len(products_in_stock)} products)")
-        print(f"  - products_in_stock.csv")
-        print(f"  - products_out_stock.json ({len(products_out_stock)} products)")
-        print(f"  - products_out_stock.csv")
+        logger.info(f"\nFiles generated:")
+        logger.info(f"  - products_in_stock.json ({len(products_in_stock)} products)")
+        logger.info(f"  - products_in_stock.csv")
+        logger.info(f"  - products_out_stock.json ({len(products_out_stock)} products)")
+        logger.info(f"  - products_out_stock.csv")
         
-        print("="*60) 
+        logger.info("="*60) 
+
+    def analyze_stock_patterns(self, products: List[Dict]) -> Dict:
+        # ...
+        return {}
+
+    def analyze_availability_by_store(self, products: List[Dict]) -> Dict:
+        # ...
+        return {} 

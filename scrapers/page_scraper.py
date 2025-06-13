@@ -1,133 +1,145 @@
 """Page scraper for product listing pages."""
 
 import json
-from typing import List, Optional
+from typing import List, Optional, Dict
 from bs4 import BeautifulSoup
-
 from .base_scraper import BaseScraper
 from models.product import Product
+import logging
 
+logger = logging.getLogger(__name__)
 
 class PageScraper(BaseScraper):
-    """Scraper for product listing pages."""
     
-    def get_products_page(self, page: int) -> Optional[str]:
-        """
-        Get a page of products from the listing.
-        
-        Args:
-            page: Page number to scrape
-            
-        Returns:
-            HTML content or None if failed
-        """
+    def scrape_page(self, page: int) -> List[Product]:
+        """Scrape products from a specific page."""
         url = f"https://www.locally.com/search/all/activities/depts?store={self.store_id}&sort=pop&page={page}"
         
-        response = self.make_request(url)
+        try:
+            response = self.session.get(url, headers=self.headers)
+            if response.status_code == 404:
+                logger.info(f"Page {page} not found (404) - No more pages")
+                return []
+            elif response.status_code != 200:
+                logger.warning(f"Error {response.status_code} on page {page}")
+                return []
+        except Exception as e:
+            logger.error(f"Error making request to page {page}: {e}")
+            return []
         
-        if response is None:
-            return None
+        soup = BeautifulSoup(response.text, 'html.parser')
+        json_scripts = soup.find_all('script', {'type': 'application/ld+json'})
         
-        if response.status_code == 200:
-            return response.text
-        elif response.status_code == 404:
-            print(f"Page {page} not found (404) - No more pages")
-            return None
-        else:
-            print(f"Error {response.status_code} on page {page}")
-            return None
-    
-    def extract_products_from_html(self, html: str) -> List[Product]:
-        """
-        Extract product information from JSON-LD in HTML.
-        
-        Args:
-            html: HTML content of the page
-            
-        Returns:
-            List of Product objects
-        """
-        soup = BeautifulSoup(html, 'html.parser')
         products = []
-        
-        # Find the JSON-LD scripts
-        json_scripts = soup.find_all('script', type='application/ld+json')
         
         for script in json_scripts:
             try:
                 json_data = json.loads(script.string)
                 
-                # If it's a list of products
                 if isinstance(json_data, list):
                     for item in json_data:
                         if item.get('@type') == 'Product':
                             product = Product.from_json_ld(item)
                             if product:
                                 products.append(product)
-                
-                # If it's a single product
-                elif isinstance(json_data, dict) and json_data.get('@type') == 'Product':
+                elif json_data.get('@type') == 'Product':
                     product = Product.from_json_ld(json_data)
                     if product:
                         products.append(product)
                         
             except json.JSONDecodeError as e:
-                print(f"Error parsing JSON-LD: {e}")
+                logger.error(f"Error parsing JSON-LD on page {page}: {e}")
                 continue
         
         return products
     
-    def scrape_page(self, page: int) -> List[Product]:
-        """
-        Scrape a single page and return products.
+    def get_product_links(self, page: int) -> List[str]:
+        """Get product links from a specific page."""
+        url = f"https://www.locally.com/search/all/activities/depts?store={self.store_id}&sort=pop&page={page}"
         
-        Args:
-            page: Page number to scrape
-            
-        Returns:
-            List of Product objects found on the page
-        """
-        print(f"Scraping page {page}...")
-        
-        html = self.get_products_page(page)
-        if not html:
-            print(f"Could not get page {page}")
+        try:
+            response = self.session.get(url, headers=self.headers)
+            if response.status_code != 200:
+                return []
+        except Exception as e:
+            logger.error(f"Error getting page {page}: {e}")
             return []
         
-        products = self.extract_products_from_html(html)
-        print(f"Found {len(products)} products on page {page}")
+        soup = BeautifulSoup(response.text, 'html.parser')
         
-        # Set page number for each product
-        for product in products:
-            product.page_number = page
+        links = []
+        product_links = soup.find_all('a', href=True)
         
-        return products
+        for link in product_links:
+            href = link['href']
+            if '/product/' in href:
+                if href.startswith('/'):
+                    href = self.base_url + href
+                links.append(href)
+        
+        return list(set(links))
     
-    def scrape_pages_range(self, start_page: int = 1, end_page: Optional[int] = None) -> List[Product]:
-        """
-        Scrape a range of pages.
+    def _extract_product_from_json_ld(self, json_data: dict) -> Optional[Product]:
+        """Extract product from JSON-LD data (fallback method)."""
+        try:
+            external_id = ""
+            url = json_data.get('url', '')
+            
+            if url:
+                import re
+                match = re.search(r'/product/(\d+)/', url)
+                if match:
+                    external_id = match.group(1)
+            
+            if not external_id:
+                external_id = json_data.get('sku', '') or json_data.get('@id', '')
+            
+            name = json_data.get('name', '')
+            brand_data = json_data.get('brand', {})
+            
+            if isinstance(brand_data, dict):
+                brand = brand_data.get('name', '')
+            else:
+                brand = str(brand_data) if brand_data else ''
+            
+            if not external_id or not name:
+                return None
+            
+            product = Product(external_id, name, brand)
+            product.url = url
+            product.sku = json_data.get('sku', '')
+            
+            images = json_data.get('image', [])
+            if isinstance(images, str):
+                product.images = [images]
+            elif isinstance(images, list):
+                product.images = images
+            
+            offers = json_data.get('offers', [])
+            if offers and isinstance(offers, list):
+                first_offer = offers[0]
+                try:
+                    product.external_sell_price = float(first_offer.get('price', 0))
+                except (ValueError, TypeError):
+                    product.external_sell_price = 0.0
+                product.currency = first_offer.get('priceCurrency', '')
+                product.condition = first_offer.get('itemCondition', '')
+            
+            return product
+            
+        except Exception as e:
+            logger.error(f"Error creating product from JSON-LD (fallback): {e}")
+            return None
+    
+    def scrape_products_from_page(self, page: int = 0) -> List[Product]:
+        """Legacy method for backward compatibility."""
+        logger.info(f"Scraping page {page}...")
         
-        Args:
-            start_page: Starting page number
-            end_page: Ending page number (None for all pages until empty)
-            
-        Returns:
-            List of all Product objects found
-        """
-        all_products = []
-        page = start_page
+        products = self.scrape_page(page)
         
-        while True:
-            if end_page is not None and page > end_page:
-                break
-            
-            products = self.scrape_page(page)
-            
-            if not products:
-                print(f"No products found on page {page}. Stopping.")
-                break
-            
-            all_products.extend(products)
-            page += 1
+        if not products:
+            logger.warning(f"Could not get any products from page {page}")
+            return []
         
-        return all_products 
+        logger.info(f"Found {len(products)} products on page {page}")
+        return products 

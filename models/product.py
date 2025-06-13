@@ -1,7 +1,8 @@
 """Product data model."""
 
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Union
 import json
+from .variant import Variant
 
 
 class Product:
@@ -22,6 +23,19 @@ class Product:
         self.description = ""
         self.variants: List[Dict] = []
         self.page_number: Optional[int] = None
+        self.store_id = ""
+        self.lat = 0.0
+        self.lng = 0.0
+        self.zipcode = ""
+        self.store_name = ""
+    
+    def set_store_info(self, store_id: str, lat: float, lng: float, zipcode: str, store_name: str):
+        """Set store information for the product."""
+        self.store_id = store_id
+        self.lat = lat
+        self.lng = lng
+        self.zipcode = zipcode
+        self.store_name = store_name
     
     @property
     def variants_count(self) -> int:
@@ -33,9 +47,52 @@ class Product:
         """Number of images for this product."""
         return len(self.images)
     
-    def add_variant(self, variant_data: Dict):
+    def add_variant(self, variant_data: Union[Dict, Variant]):
         """Add a variant to the product."""
-        self.variants.append(variant_data)
+        if isinstance(variant_data, Variant):
+            self.variants.append(variant_data.to_dict())
+        else:
+            self.variants.append(variant_data)
+    
+    def add_variants(self, variants: List[Union[Dict, Variant]]):
+        """Add multiple variants to the product."""
+        for variant in variants:
+            self.add_variant(variant)
+    
+    def get_variants_as_objects(self) -> List[Variant]:
+        """Get variants as Variant objects."""
+        variant_objects = []
+        for variant_dict in self.variants:
+            # Create Variant from stored dict data
+            variant = Variant(
+                name=variant_dict.get('name', ''),
+                upc=variant_dict.get('upc', ''),
+                page_id_variant=variant_dict.get('page_id_variant', '')
+            )
+            
+            # Set additional properties
+            variant.external_id = variant_dict.get('external_id', '')
+            variant.variant_key = variant_dict.get('variant_key', '')
+            variant.attributes = variant_dict.get('attributes', [])
+            variant.url_variant = variant_dict.get('url_variant', '')
+            variant.stock_status = variant_dict.get('stock_status', 'Not Collected')
+            variant.external_quantity = variant_dict.get('external_quantity')
+            variant.store_name = variant_dict.get('store_name', '')
+            variant.store_address = variant_dict.get('store_address', '')
+            variant.store_id = variant_dict.get('store_id', '')
+            variant.variant_price = variant_dict.get('variant_price', '')
+            variant.variant_currency = variant_dict.get('variant_currency', '')
+            variant.stock_data = variant_dict.get('stock_data', {})
+            variant.parent_product_id = variant_dict.get('parent_product_id', self.external_id)
+            variant.page_number = variant_dict.get('page_number', self.page_number)
+            
+            variant_objects.append(variant)
+        
+        return variant_objects
+    
+    def update_variants_from_objects(self, variant_objects: List[Variant]):
+        """Update variants from Variant objects."""
+        self.variants = [variant.to_dict() for variant in variant_objects]
     
     def to_dict(self) -> Dict:
         """Convert product to dictionary for export."""
@@ -55,68 +112,86 @@ class Product:
             "variants": self.variants,
             "variants_count": self.variants_count,
             "images_count": self.images_count,
-            "page_number": self.page_number
+            "page_number": self.page_number,
+            "store_id": self.store_id,
+            "lat": self.lat,
+            "lng": self.lng,
+            "zipcode": self.zipcode,
+            "store_name": self.store_name
         }
     
     def to_dict_for_csv(self) -> Dict:
         """Convert product to dictionary optimized for CSV export."""
         data = self.to_dict()
         
-        # Convert lists to pipe-separated strings for CSV
         data['images_csv'] = '|'.join(self.images) if self.images else ''
         data['variants_json'] = json.dumps(self.variants, ensure_ascii=False)
         
-        # Remove the original list fields for CSV
         data.pop('images', None)
         data.pop('variants', None)
         
         return data
     
     @classmethod
-    def from_json_ld(cls, json_data: Dict) -> Optional['Product']:
-        """Create Product from JSON-LD data."""
-        if json_data.get('@type') != 'Product':
-            return None
-        
-        # Extract product ID from URL
-        url = json_data.get('url', '')
-        external_id = ""
-        if url:
-            import re
-            match = re.search(r'/product/(\d+)/', url)
-            if match:
-                external_id = match.group(1)
-        
-        if not external_id:
-            return None
-        
-        name = json_data.get('name', '')
-        
-        # Extract brand
-        brand_data = json_data.get('brand', {})
-        if isinstance(brand_data, dict):
-            brand = brand_data.get('name', '')
-        else:
-            brand = str(brand_data)
-        
-        product = cls(external_id, name, brand)
-        product.url = url
-        product.sku = json_data.get('sku', '')
-        
-        # Extract image
-        image = json_data.get('image', '')
-        if image:
-            product.images = [image]
-        
-        # Extract price from offers
-        offers = json_data.get('offers', [])
-        if offers and isinstance(offers, list):
-            first_offer = offers[0]
-            try:
-                product.external_sell_price = float(first_offer.get('price', 0))
-            except (ValueError, TypeError):
-                product.external_sell_price = 0.0
-            product.currency = first_offer.get('priceCurrency', '')
-            product.condition = first_offer.get('itemCondition', '')
-        
-        return product 
+    def from_json_ld(cls, json_ld_data: Dict) -> Optional['Product']:
+        """Create Product from JSON-LD structured data."""
+        try:
+            external_id = ""
+            url = json_ld_data.get('url', '')
+            
+            if url:
+                import re
+                match = re.search(r'/product/(\d+)/', url)
+                if match:
+                    external_id = match.group(1)
+            
+            if not external_id:
+                external_id = json_ld_data.get('sku', '') or json_ld_data.get('@id', '')
+            
+            name = json_ld_data.get('name', '')
+            brand = json_ld_data.get('brand', {})
+            
+            if isinstance(brand, dict):
+                brand = brand.get('name', '')
+            elif isinstance(brand, str):
+                brand = brand
+            else:
+                brand = ''
+            
+            if not external_id or not name:
+                return None
+            
+            product = cls(external_id, name, brand)
+            
+            product.url = url
+            product.sku = json_ld_data.get('sku', '')
+            product.description = json_ld_data.get('description', '')
+            
+            offers = json_ld_data.get('offers', [])
+            if offers:
+                if isinstance(offers, list) and len(offers) > 0:
+                    first_offer = offers[0]
+                    try:
+                        product.external_sell_price = float(first_offer.get('price', 0))
+                    except (ValueError, TypeError):
+                        product.external_sell_price = 0.0
+                    product.currency = first_offer.get('priceCurrency', '')
+                    product.condition = first_offer.get('itemCondition', '')
+                elif isinstance(offers, dict):
+                    try:
+                        product.external_sell_price = float(offers.get('price', 0))
+                    except (ValueError, TypeError):
+                        product.external_sell_price = 0.0
+                    product.currency = offers.get('priceCurrency', '')
+                    product.condition = offers.get('itemCondition', '')
+            
+            images = json_ld_data.get('image', [])
+            if isinstance(images, str):
+                product.images = [images]
+            elif isinstance(images, list):
+                product.images = images
+            
+            return product
+            
+        except Exception:
+            return None 
