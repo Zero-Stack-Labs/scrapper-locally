@@ -20,16 +20,16 @@ class ScraperService:
         self.output_dir = Path(output_dir)
         self.product_repository = ProductRepository()
 
-    def process_single_store(self, store_config, scraper_params):
-        logger.info(f"Processing store {store_config['store_id']}")
+    def process_single_store(self, store_config, scraper_params, store_id: str, store_name: str):
+        logger.info(f"Processing store {store_id}")
 
         try:
             result = self.repository.scrape_single_store(
-                store_id=store_config["store_id"],
+                store_id=store_id,
                 zipcode=store_config["zipcode"],
                 lat=store_config["lat"],
                 lng=store_config["lng"],
-                store_name=store_config.get("store_name", ""),
+                store_name=store_name,
                 page_delay=scraper_params.get("page_delay", 2),
                 max_product_workers=scraper_params.get("max_product_workers", 5),
                 save_every=scraper_params.get("save_every", 10),
@@ -37,11 +37,11 @@ class ScraperService:
             )
 
             logger.info(
-                f"Scraping successful for store {store_config['store_id']}: {result['products_scraped']} products")
+                f"Scraping successful for store {store_id}: {result['products_scraped']} products")
 
             return {
                 "success": True,
-                "store_id": store_config["store_id"],
+                "store_id": store_id,
                 "zipcode": store_config["zipcode"],
                 "products_scraped": result["products_scraped"],
                 "products": result["products"],
@@ -49,10 +49,10 @@ class ScraperService:
             }
 
         except Exception as e:
-            logger.error(f"Error processing store {store_config['store_id']}: {e}", exc_info=True)
+            logger.error(f"Error processing store {store_id}: {e}", exc_info=True)
             return {
                 "success": False,
-                "store_id": store_config["store_id"],
+                "store_id": store_id,
                 "zipcode": store_config["zipcode"],
                 "error": str(e),
                 "message": f"Failed to scrape store: {str(e)}"

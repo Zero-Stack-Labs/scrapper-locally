@@ -26,13 +26,13 @@ class StockAnalyzer:
         else:
             self.product_repository = None
     
-    def generate_stock_analysis_files(self, all_products: List[Dict], store_configurations: List[Dict]):
+    def generate_stock_analysis_files(self, all_products: List[Dict], locations: List[Dict]):
         if not all_products:
             return
 
-        all_zipcodes = {config['zipcode'] for config in store_configurations}
+        all_zipcodes = {location['zipcode'] for location in locations}
         
-        logger.info(f"--- Analyzing stock across {len(store_configurations)} locations ---")
+        logger.info(f"--- Analyzing stock across {len(locations)} locations ---")
         logger.info(f"Analyzing availability for zipcodes: {sorted(list(all_zipcodes))}")
         
         product_availability = self._analyze_product_availability(all_products, all_zipcodes)

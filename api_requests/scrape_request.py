@@ -2,16 +2,16 @@ from pydantic import BaseModel
 from typing import List
 
 
-class StoreConfig(BaseModel):
+class Location(BaseModel):
     zipcode: str
     lat: float
     lng: float
-    store_id: str
-    store_name: str
 
 
 class ScrapeRequest(BaseModel):
-    store_configurations: List[StoreConfig]
+    store_id: str
+    store_name: str
+    locations: List[Location]
     output_dir: str = "."
     page_delay: float = 5.0
     max_product_workers: int = 10

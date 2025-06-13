@@ -438,7 +438,7 @@ else:
 
 ### Parámetros del Request
 
-- **`store_configurations`**: Lista de tiendas a procesar
+- **`locations`**: Lista de ubicaciones a procesar
   - `store_id`: ID de la tienda
   - `zipcode`: Código postal de la ubicación
 

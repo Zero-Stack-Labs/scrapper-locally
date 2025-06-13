@@ -1,3 +1,3 @@
-from .scrape_request import ScrapeRequest, StoreConfig
+from .scrape_request import ScrapeRequest, Location
 
-__all__ = ['ScrapeRequest', 'StoreConfig'] 
+__all__ = ['ScrapeRequest', 'Location'] 
