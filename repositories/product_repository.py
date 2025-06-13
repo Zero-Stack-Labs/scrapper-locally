@@ -15,9 +15,6 @@ class ProductRepository:
         self.db_session = SessionLocal
     
     def upsert_product(self, product: Product, db: Optional[Session] = None) -> ProductDB:
-        """
-        Inserta o actualiza un producto basado en external_id + provider_id
-        """
         if db is None:
             db = self.db_session()
             should_close = True
@@ -68,74 +65,7 @@ class ProductRepository:
             if should_close:
                 db.close()
     
-    def upsert_products_batch(self, products: List[Product]) -> List[ProductDB]:
-        """
-        Procesa un lote de productos con upsert
-        """
-        db = self.db_session()
-        results = []
-        
-        try:
-            for product in products:
-                result = self.upsert_product(product, db)
-                results.append(result)
-            
-            logger.info(f"Procesados {len(results)} productos en lote")
-            return results
-            
-        except Exception as e:
-            logger.error(f"Error procesando lote de productos: {e}")
-            raise e
-        finally:
-            db.close()
-    
-    def find_by_external_id_and_provider(self, external_id: str, provider_id: str) -> Optional[ProductDB]:
-        """
-        Busca un producto por external_id y provider_id
-        """
-        db = self.db_session()
-        try:
-            return db.query(ProductDB).filter(
-                ProductDB.external_id == external_id,
-                ProductDB.provider_id == provider_id
-            ).first()
-        finally:
-            db.close()
-    
-    def find_by_store_id(self, store_id: str) -> List[ProductDB]:
-        """
-        Busca productos por store_id
-        """
-        db = self.db_session()
-        try:
-            return db.query(ProductDB).filter(ProductDB.store_id == store_id).all()
-        finally:
-            db.close()
-    
-    def find_by_store_name(self, store_name: str) -> List[ProductDB]:
-        """
-        Busca productos por store_name
-        """
-        db = self.db_session()
-        try:
-            return db.query(ProductDB).filter(ProductDB.store_name == store_name).all()
-        finally:
-            db.close()
-    
-    def find_by_provider_id(self, provider_id: str) -> List[ProductDB]:
-        """
-        Busca todos los productos de un provider
-        """
-        db = self.db_session()
-        try:
-            return db.query(ProductDB).filter(ProductDB.provider_id == provider_id).all()
-        finally:
-            db.close()
-    
     def _product_to_db_dict(self, product: Product) -> dict:
-        """
-        Convierte un objeto Product a diccionario para insertar en DB
-        """
         return {
             'record_type': product.record_type,
             'provider_id': product.provider_id,

@@ -130,9 +130,6 @@ class StockAnalyzer:
         return unified_products
     
     def _save_unified_stock_file(self, unified_products: List[Dict]):
-        self._save_json_file(unified_products, "products_stock_analysis.json")
-        self._save_csv_file(unified_products, "products_stock_analysis.csv")
-        
         in_stock_products = [p for p in unified_products if p.get('stock_status') == 'in_stock']
         out_of_stock_products = [p for p in unified_products if p.get('stock_status') == 'out_of_stock']
         

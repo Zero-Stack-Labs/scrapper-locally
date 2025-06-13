@@ -61,35 +61,3 @@ class ScraperRepository:
         except Exception as e:
             logger.error(f"Error in scrape_single_store: {e}", exc_info=True)
             raise
-    
-    def scrape_store_products(self, 
-                             store_config: Dict[str, Any], 
-                             filename_suffix: str,
-                             scraper_params: Dict[str, Any]) -> List[Dict]:
-        scraper = LocallyScraper(
-            output_dir=self.output_dir,
-            store_config=store_config,
-            filename_suffix=filename_suffix
-        )
-        
-        products = scraper.scrape_all_products_with_delays(
-            page_delay=scraper_params.get('page_delay', 5.0),
-            max_product_workers=scraper_params.get('max_product_workers', 10),
-            save_progress_every=scraper_params.get('save_every', 5),
-            max_pages=scraper_params.get('max_pages', None)
-        )
-        
-        scraper.save_results(products)
-        return products
-    
-    def generate_stock_analysis(self, 
-                               all_products: List[Dict], 
-                               store_configurations: List[Dict]) -> bool:
-        try:
-            from utils.stock_analyzer import StockAnalyzer
-            analyzer = StockAnalyzer(self.output_dir)
-            analyzer.generate_stock_analysis_files(all_products, store_configurations)
-            return True
-        except Exception as e:
-            logger.error(f"Error generating stock analysis: {e}")
-            return False 

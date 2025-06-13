@@ -68,8 +68,6 @@ class ScraperManager:
                         "store_id": store_config.get("store_id"),
                         "error": str(e)
                     })
-
-        results_file = self.save_final_results(task_id, all_products)
         
         if all_products:
             logger.info(f"Generando análisis de stock para {len(all_products)} productos...")
@@ -83,37 +81,6 @@ class ScraperManager:
             results_file=results_file
         )
     
-    def save_final_results(self, task_id: str, products: List[Dict]) -> str:
-        results_dir = self.output_dir / task_id
-        results_dir.mkdir(parents=True, exist_ok=True)
-        results_file = results_dir / "scraped_products.json"
-        
-        with open(results_file, 'w', encoding='utf-8') as f:
-            json.dump(products, f, indent=2, ensure_ascii=False)
-            
-        return str(results_file)
-
-    def task_exists(self, task_id: str) -> bool:
-        with self._lock:
-            return task_id in self.tasks
-
-    def is_task_completed(self, task_id: str) -> bool:
-        with self._lock:
-            task = self.tasks.get(task_id)
-            return task and task["status"] == "completed"
-
-    def get_task_results(self, task_id: str) -> Dict[str, Any]:
-        with self._lock:
-            task = self.tasks.get(task_id, {})
-            results_file = task.get("results_file")
-            
-            if results_file and Path(results_file).exists():
-                with open(results_file, 'r', encoding='utf-8') as f:
-                    products = json.load(f)
-                return {"task_info": task, "products": products}
-            
-            return {"task_info": task, "products": []}
-    
     def generate_stock_analysis(self, all_products: List[Dict], store_configurations: List[Dict]):
         try:
             from utils.stock_analyzer import StockAnalyzer
@@ -122,6 +89,3 @@ class ScraperManager:
             logger.info("✅ Análisis de stock y upsert completados")
         except Exception as e:
             logger.error(f"❌ Error en análisis de stock: {e}", exc_info=True)
-    
-    def scrape_multiple_stores(self, store_configurations: List[Dict[str, Any]], scraper_params: Dict[str, Any]) -> Dict[str, Any]:
-        return self.service.scrape_multiple_stores(store_configurations, scraper_params) 
