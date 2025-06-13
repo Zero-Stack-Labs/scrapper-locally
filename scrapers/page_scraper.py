@@ -16,7 +16,10 @@ class PageScraper(BaseScraper):
         url = f"https://www.locally.com/search/all/activities/depts?store={self.store_id}&sort=pop&page={page}"
         
         try:
-            response = self.session.get(url, headers=self.headers)
+            response = self.make_request(url)
+            if not response:
+                logger.error(f"No response received for page {page}")
+                return []
             if response.status_code == 404:
                 logger.info(f"Page {page} not found (404) - No more pages")
                 return []
@@ -58,8 +61,8 @@ class PageScraper(BaseScraper):
         url = f"https://www.locally.com/search/all/activities/depts?store={self.store_id}&sort=pop&page={page}"
         
         try:
-            response = self.session.get(url, headers=self.headers)
-            if response.status_code != 200:
+            response = self.make_request(url)
+            if not response or response.status_code != 200:
                 return []
         except Exception as e:
             logger.error(f"Error getting page {page}: {e}")

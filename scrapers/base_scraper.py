@@ -23,6 +23,42 @@ class BaseScraper:
     def set_headers(self, headers: dict):
         self.headers.update(headers)
 
+    def make_request(self, url: str, method: str = 'GET', **kwargs) -> Optional[requests.Response]:
+        """
+        Make a request using the session with proper headers and error handling.
+        
+        Args:
+            url: URL to request
+            method: HTTP method (GET, POST, etc.)
+            **kwargs: Additional arguments for the request
+            
+        Returns:
+            Response object or None if failed
+        """
+        try:
+            # Use stored cookies if available
+            if self.cookies:
+                self.session.cookies.update(self.cookies)
+            
+            # Make the request
+            response = self.session.request(
+                method=method,
+                url=url,
+                headers=self.headers,
+                timeout=30,
+                **kwargs
+            )
+            
+            # Update cookies from response
+            self.cookies.update(self.session.cookies.get_dict())
+            
+            logger.debug(f"Request to {url}: {response.status_code}")
+            return response
+            
+        except requests.RequestException as e:
+            logger.error(f"Request failed for {url}: {e}")
+            return None
+
     def initialize_location(self, lat: float, lng: float) -> bool:
         """
         Initializes the user's location by making a GET request to a specific endpoint.

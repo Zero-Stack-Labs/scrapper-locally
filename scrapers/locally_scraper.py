@@ -184,6 +184,15 @@ class LocallyScraper:
                 if isinstance(variant, dict):
                     variant['sku'] = final_sku
         
+        # Asignar imagen del producto a variantes que no tengan imagen
+        product_images = merged_data.get('images', [])
+        main_image = product_images[0] if product_images else ''
+        
+        if main_image and merged_data.get('variants'):
+            for variant in merged_data['variants']:
+                if isinstance(variant, dict) and not variant.get('image'):
+                    variant['image'] = main_image
+        
         merged_data['store_id'] = self.store_config.get('store_id', '')
         merged_data['lat'] = self.store_config.get('lat', 0.0)
         merged_data['lng'] = self.store_config.get('lng', 0.0)
