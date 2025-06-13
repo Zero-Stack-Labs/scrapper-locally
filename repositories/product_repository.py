@@ -11,20 +11,20 @@ logger = logging.getLogger(__name__)
 
 
 class ProductRepository:
-    
+
     def __init__(self):
         self.db_session = SessionLocal
-    
+
     def upsert_product(self, product: Product, db: Optional[Session] = None) -> ProductDB:
         if db is None:
             db = self.db_session()
             should_close = True
         else:
             should_close = False
-        
+
         try:
             product_data = self._product_to_db_dict(product)
-            
+
             stmt = insert(ProductDB).values(**product_data)
             stmt = stmt.on_conflict_do_update(
                 index_elements=['external_id', 'provider_id'],
@@ -45,19 +45,22 @@ class ProductRepository:
                     store_id=stmt.excluded.store_id,
                     lat=stmt.excluded.lat,
                     lng=stmt.excluded.lng,
-                    zipcode=stmt.excluded.zipcode,
                     store_name=stmt.excluded.store_name,
+                    stock_status=stmt.excluded.stock_status,
+                    available_zipcodes=stmt.excluded.available_zipcodes,
+                    in_stock_zipcodes=stmt.excluded.in_stock_zipcodes,
+                    all_zipcodes=stmt.excluded.all_zipcodes,
                     updated_at=func.now()
                 )
             ).returning(ProductDB)
-            
+
             result = db.execute(stmt)
             db.commit()
-            
+
             product_db = result.fetchone()[0]
-            
+
             return product_db
-            
+
         except Exception as e:
             db.rollback()
             logger.error(f"Error en upsert de producto {product.external_id}: {e}")
@@ -65,7 +68,7 @@ class ProductRepository:
         finally:
             if should_close:
                 db.close()
-    
+
     def _product_to_db_dict(self, product: Product) -> dict:
         return {
             'record_type': product.record_type,
@@ -87,6 +90,9 @@ class ProductRepository:
             'store_id': product.store_id,
             'lat': product.lat,
             'lng': product.lng,
-            'zipcode': product.zipcode,
-            'store_name': product.store_name
-        } 
+            'store_name': product.store_name,
+            'stock_status': product.stock_status,
+            'available_zipcodes': product.available_zipcodes,
+            'in_stock_zipcodes': product.in_stock_zipcodes,
+            'all_zipcodes': product.all_zipcodes
+        }

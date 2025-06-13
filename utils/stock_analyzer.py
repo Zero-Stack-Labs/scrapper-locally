@@ -125,6 +125,10 @@ class StockAnalyzer:
                     'out_of_stock_reasons': out_of_stock_reasons
                 }
             
+            product_data['available_zipcodes'] = sorted(list(available_zipcodes))
+            product_data['in_stock_zipcodes'] = sorted(list(in_stock_zipcodes))
+            product_data['all_zipcodes'] = sorted(list(all_zipcodes))
+            
             unified_products.append(product_data)
         
         return unified_products
@@ -199,6 +203,10 @@ class StockAnalyzer:
             product.lng = float(data.get('lng', 0))
             product.zipcode = data.get('zipcode', '')
             product.store_name = data.get('store_name', '')
+            product.stock_status = data.get('stock_status', 'unknown')
+            product.available_zipcodes = data.get('available_zipcodes', [])
+            product.in_stock_zipcodes = data.get('in_stock_zipcodes', [])
+            product.all_zipcodes = data.get('all_zipcodes', [])
             
             if 'images' in data:
                 if isinstance(data['images'], str):

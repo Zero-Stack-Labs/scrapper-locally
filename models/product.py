@@ -29,6 +29,10 @@ class Product:
         self.lng = 0.0
         self.zipcode = ""
         self.store_name = ""
+        self.stock_status = "unknown"
+        self.available_zipcodes: List[str] = []
+        self.in_stock_zipcodes: List[str] = []
+        self.all_zipcodes: List[str] = []
         self.created_at: Optional[datetime] = None
         self.updated_at: Optional[datetime] = None
     
@@ -126,6 +130,10 @@ class Product:
             "lng": self.lng,
             "zipcode": self.zipcode,
             "store_name": self.store_name,
+            "stock_status": self.stock_status,
+            "available_zipcodes": self.available_zipcodes,
+            "in_stock_zipcodes": self.in_stock_zipcodes,
+            "all_zipcodes": self.all_zipcodes,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None
         }

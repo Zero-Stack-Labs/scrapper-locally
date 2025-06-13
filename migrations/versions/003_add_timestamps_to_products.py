@@ -18,13 +18,7 @@ depends_on = None
 def upgrade() -> None:
     op.add_column('products', sa.Column('created_at', sa.DateTime(timezone=True), server_default=func.now(), nullable=False))
     op.add_column('products', sa.Column('updated_at', sa.DateTime(timezone=True), server_default=func.now(), nullable=False))
-    
-    op.create_index('ix_products_created_at', 'products', ['created_at'], unique=False)
-    op.create_index('ix_products_updated_at', 'products', ['updated_at'], unique=False)
-
 
 def downgrade() -> None:
-    op.drop_index('ix_products_updated_at', table_name='products')
-    op.drop_index('ix_products_created_at', table_name='products')
     op.drop_column('products', 'updated_at')
     op.drop_column('products', 'created_at') 
