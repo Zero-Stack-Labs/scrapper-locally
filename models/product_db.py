@@ -1,5 +1,6 @@
-from sqlalchemy import Column, String, Float, Integer, Text, JSON
+from sqlalchemy import Column, String, Float, Integer, Text, JSON, DateTime
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.sql import func
 import uuid
 from database import Base
 
@@ -28,4 +29,6 @@ class ProductDB(Base):
     lat = Column(Float, default=0.0)
     lng = Column(Float, default=0.0)
     zipcode = Column(String(20), default="")
-    store_name = Column(String(255), default="") 
+    store_name = Column(String(255), default="")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False) 

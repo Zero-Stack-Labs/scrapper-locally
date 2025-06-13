@@ -2,6 +2,7 @@ import logging
 from typing import List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.sql import func
 from models.product_db import ProductDB
 from models.product import Product
 from database import SessionLocal
@@ -45,7 +46,8 @@ class ProductRepository:
                     lat=stmt.excluded.lat,
                     lng=stmt.excluded.lng,
                     zipcode=stmt.excluded.zipcode,
-                    store_name=stmt.excluded.store_name
+                    store_name=stmt.excluded.store_name,
+                    updated_at=func.now()
                 )
             ).returning(ProductDB)
             

@@ -1,6 +1,7 @@
 """Product data model."""
 
 from typing import List, Dict, Optional, Union
+from datetime import datetime
 import json
 from .variant import Variant
 
@@ -28,6 +29,8 @@ class Product:
         self.lng = 0.0
         self.zipcode = ""
         self.store_name = ""
+        self.created_at: Optional[datetime] = None
+        self.updated_at: Optional[datetime] = None
     
     def set_store_info(self, store_id: str, lat: float, lng: float, zipcode: str, store_name: str):
         """Set store information for the product."""
@@ -36,6 +39,11 @@ class Product:
         self.lng = lng
         self.zipcode = zipcode
         self.store_name = store_name
+    
+    def set_timestamps(self, created_at: Optional[datetime] = None, updated_at: Optional[datetime] = None):
+        """Set timestamp information for the product."""
+        self.created_at = created_at
+        self.updated_at = updated_at
     
     @property
     def variants_count(self) -> int:
@@ -117,7 +125,9 @@ class Product:
             "lat": self.lat,
             "lng": self.lng,
             "zipcode": self.zipcode,
-            "store_name": self.store_name
+            "store_name": self.store_name,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None
         }
     
     def to_dict_for_csv(self) -> Dict:
