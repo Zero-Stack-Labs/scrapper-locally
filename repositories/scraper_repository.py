@@ -13,7 +13,8 @@ class ScraperRepository:
                            store_name: str = "",
                            page_delay: float = 2.0, 
                            max_product_workers: int = 5, 
-                           save_every: int = 10) -> Dict[str, Any]:
+                           save_every: int = 10,
+                           max_pages: int = None) -> Dict[str, Any]:
         logger.info(f"Starting scraping for store {store_id}")
         
         store_config = {
@@ -36,7 +37,8 @@ class ScraperRepository:
             products = scraper.scrape_all_products_with_delays(
                 page_delay=page_delay,
                 max_product_workers=max_product_workers,
-                save_progress_every=save_every
+                save_progress_every=save_every,
+                max_pages=max_pages
             )
             
             logger.info(f"Products obtained: {len(products)}")
@@ -73,7 +75,8 @@ class ScraperRepository:
         products = scraper.scrape_all_products_with_delays(
             page_delay=scraper_params.get('page_delay', 5.0),
             max_product_workers=scraper_params.get('max_product_workers', 10),
-            save_progress_every=scraper_params.get('save_every', 5)
+            save_progress_every=scraper_params.get('save_every', 5),
+            max_pages=scraper_params.get('max_pages', None)
         )
         
         scraper.save_results(products)

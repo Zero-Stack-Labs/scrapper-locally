@@ -40,7 +40,8 @@ class LocallyScraper:
                                        page_delay: float = 5.0,
                                        max_product_workers: int = 5,
                                        save_progress_every: int = 5,
-                                       start_page: int = 0) -> List[dict]:
+                                       start_page: int = 0,
+                                       max_pages: int = None) -> List[dict]:
         all_products = []
         page = start_page
         seen_product_ids = set()
@@ -52,6 +53,10 @@ class LocallyScraper:
         logger.info("Starting page-by-page scraping...")
         
         while True:
+            if max_pages is not None and (page - start_page) >= max_pages:
+                logger.info(f"Reached maximum pages limit ({max_pages}). Ending scraping.")
+                break
+                
             logger.info(f"--- Processing page {page} ---")
             
             general_products = self.page_scraper.scrape_page(page)

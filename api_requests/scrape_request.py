@@ -15,4 +15,5 @@ class ScrapeRequest(BaseModel):
     output_dir: str = "."
     page_delay: float = 5.0
     max_product_workers: int = 10
-    save_every: int = 5 
+    save_every: int = 5
+    max_pages: int = None 

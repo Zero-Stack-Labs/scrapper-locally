@@ -71,6 +71,10 @@ class ScraperManager:
 
         results_file = self.save_final_results(task_id, all_products)
         
+        if all_products:
+            logger.info(f"Generando análisis de stock para {len(all_products)} productos...")
+            self.generate_stock_analysis(all_products, store_configurations)
+        
         self.update_task_status(
             task_id,
             "completed",
@@ -109,6 +113,15 @@ class ScraperManager:
                 return {"task_info": task, "products": products}
             
             return {"task_info": task, "products": []}
+    
+    def generate_stock_analysis(self, all_products: List[Dict], store_configurations: List[Dict]):
+        try:
+            from utils.stock_analyzer import StockAnalyzer
+            analyzer = StockAnalyzer(str(self.output_dir))
+            analyzer.generate_stock_analysis_files(all_products, store_configurations)
+            logger.info("✅ Análisis de stock y upsert completados")
+        except Exception as e:
+            logger.error(f"❌ Error en análisis de stock: {e}", exc_info=True)
     
     def scrape_multiple_stores(self, store_configurations: List[Dict[str, Any]], scraper_params: Dict[str, Any]) -> Dict[str, Any]:
         return self.service.scrape_multiple_stores(store_configurations, scraper_params) 
