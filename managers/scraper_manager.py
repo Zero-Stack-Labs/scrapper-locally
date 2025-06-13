@@ -29,7 +29,6 @@ class ScraperManager:
                 "total_stores": len(store_configurations),
                 "completed_stores": 0,
                 "results_summary": [],
-                "results_file": None,
             }
         
         return task_id
@@ -78,7 +77,6 @@ class ScraperManager:
             "completed",
             end_time=datetime.now().isoformat(),
             progress=100,
-            results_file=results_file
         )
     
     def generate_stock_analysis(self, all_products: List[Dict], store_configurations: List[Dict]):

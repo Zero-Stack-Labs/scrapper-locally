@@ -25,13 +25,10 @@ class ScraperRepository:
             "store_name": store_name
         }
         
-        filename_suffix = f"{store_id}_{zipcode}"
-        
         try:
             scraper = LocallyScraper(
                 output_dir=self.output_dir,
                 store_config=store_config,
-                filename_suffix=filename_suffix
             )
             
             products = scraper.scrape_all_products_with_delays(
@@ -46,8 +43,6 @@ class ScraperRepository:
             for product in products:
                 product['location_zipcode'] = zipcode
                 product['store_id'] = store_id
-            
-            scraper.save_results(products)
             
             logger.info(f"Scraping completed successfully for {store_id}")
             

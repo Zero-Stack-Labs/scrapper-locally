@@ -13,10 +13,9 @@ logger = get_logger(__name__)
 
 class LocallyScraper:
     
-    def __init__(self, output_dir: str = ".", store_config: dict = None, filename_suffix: str = ""):
+    def __init__(self, output_dir: str = ".", store_config: dict = None):
         self.store_config = store_config or {'store_id': '85940', 'lat': 30.838215, 'lng': -87.20102, 'zipcode': '123'}
         self.output_dir = output_dir
-        self.filename_suffix = filename_suffix
         
         self.page_scraper = PageScraper()
         self.product_scraper = ProductScraper()
@@ -81,10 +80,10 @@ class LocallyScraper:
             all_products.extend(unified_products)
             
             logger.info(f"Page {page} completed: {len(unified_products)} unified products obtained")
-            
+
             if page % save_progress_every == 0:
                 logger.info(f"Saving progress up to page {page}...")
-                self.save_results(all_products)
+                self.log_results(all_products)
             
             if page_delay > 0:
                 logger.info(f"Waiting {page_delay} seconds before processing page {page + 1}...")
@@ -149,8 +148,6 @@ class LocallyScraper:
         return unified_products
     
     def _merge_product_data(self, general_product: Product, detailed_product: Product) -> dict:
-        """Merge general and detailed product data, prioritizing detailed data."""
-        
         merged_data = detailed_product.to_dict()
         
         if not merged_data.get('name') and general_product.name:
@@ -199,44 +196,14 @@ class LocallyScraper:
         merged_data['store_name'] = self.store_config.get('store_name', '')
         
         return merged_data
-    
-    def _create_variant_from_stock_info(self, stock_info: dict, product: Product) -> Variant:
-        """Create a variant from stock information."""
-        name = stock_info.get('name', f"{product.name} - Default")
-        upc = stock_info.get('upc', '')
-        
-        variant = Variant(name=name, upc=upc)
-        
-        variant.external_product_id = product.external_id
-        variant.price = stock_info.get('price', product.external_sell_price)
-        variant.stock_status = stock_info.get('availability', 'unknown')
-        
-        if stock_info.get('attributes'):
-            variant.set_attributes(stock_info['attributes'])
-        
-        if stock_info.get('image'):
-            variant.set_image(stock_info['image'])
-        
-        return variant
-    
-    def save_results(self, products: List[dict]):
-        """Save scraped products to JSON file."""
-        if self.filename_suffix:
-            filepath = Path(self.output_dir) / f"products_{self.filename_suffix}.json"
-        else:
-            filepath = Path(self.output_dir) / "products.json"
-        
-        with open(filepath, 'w', encoding='utf-8') as f:
-            json.dump(products, f, indent=2, ensure_ascii=False)
-        
-        logger.info(f"Results saved to {filepath}")
-        
+
+    def log_results(self, products: List[dict]):
         if not products:
             return
 
         products_with_variants = sum(1 for p in products if p.get('variants'))
         total_variants = sum(len(p.get('variants', [])) for p in products)
-        
+
         summary = (
             f"Total products: {len(products)}, "
             f"Products with variants: {products_with_variants}, "
@@ -247,4 +214,4 @@ class LocallyScraper:
             avg_variants = total_variants / products_with_variants
             summary += f", Average variants: {avg_variants:.2f}"
 
-        logger.info(summary) 
+        logger.info(summary)

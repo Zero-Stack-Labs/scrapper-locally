@@ -222,6 +222,9 @@ class StockAnalyzer:
             return None
     
     def _save_json_file(self, products: List[Dict], filename: str):
+        if not products:
+            return
+
         file_path = self.output_dir / filename
         
         with open(file_path, 'w', encoding='utf-8') as f:

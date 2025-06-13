@@ -53,7 +53,6 @@ class ProductRepository:
             db.commit()
             
             product_db = result.fetchone()[0]
-            logger.info(f"Producto upsert exitoso: {product.external_id}")
             
             return product_db
             
