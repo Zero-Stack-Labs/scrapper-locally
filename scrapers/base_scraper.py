@@ -1,134 +1,111 @@
-"""Base scraper class with common configuration and session management."""
-
 import requests
-from typing import Dict, Optional
+from typing import Optional
+import logging
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
+logger = logging.getLogger(__name__)
 
 class BaseScraper:
-    """Base scraper class with common headers, cookies, and session management."""
-    
     def __init__(self):
-        """Initialize base scraper with session and common configuration."""
-        self.base_url = "https://www.locally.com"
         self.session = requests.Session()
         
-        # Common headers for requests
+        retry_strategy = Retry(
+            total=3,
+            status_forcelist=[429, 500, 502, 503, 504],
+            backoff_factor=1
+        )
+        
+        adapter = HTTPAdapter(
+            pool_connections=100,
+            pool_maxsize=300,
+            max_retries=retry_strategy,
+            pool_block=False
+        )
+        
+        self.session.mount("http://", adapter)
+        self.session.mount("https://", adapter)
+        
+        self.base_url = "https://www.locally.com"
+        self.store_id: Optional[str] = None
         self.headers = {
-            'accept': 'text/html, */*; q=0.01',
-            'accept-language': 'en-US,en;q=0.9,es-US;q=0.8,es;q=0.7',
-            'priority': 'u=1, i',
-            'referer': 'https://www.locally.com/search/all/activities/depts?sort=pop',
-            'sec-ch-ua': '"Google Chrome";v="137", "Chromium";v="137", "Not/A)Brand";v="24"',
-            'sec-ch-ua-mobile': '?0',
-            'sec-ch-ua-platform': '"macOS"',
-            'sec-fetch-dest': 'empty',
-            'sec-fetch-mode': 'cors',
-            'sec-fetch-site': 'same-origin',
-            'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
-            'x-requested-with': 'XMLHttpRequest'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
         }
-        
-        # Cookies (can be updated as needed)
-        self.cookies = {
-            '_ga': 'GA1.1.1022862228.1749607930',
-            '__pr.1nvc': 'Mr0rvLRf13',
-            'lg_session_v1': 'eyJpdiI6IlwvSjJOajMxV0N6dWdpbTRxbjd2V2xrY2k4WUxpT1BoKzlXcGpwc3RrK2Q0PSIsInZhbHVlIjoidmFYbWVOcEtlcHVIZHNJaVJ0VDlxYVNQM0RXb2FkTTJnY2xVaW1WVWlNeTlZTHdDbVhOdWNSeXW9xZWZHRENaQmtaSFJzUm9xZ3o3S1RhdkdTdERHeGc9PSIsIm1hYyI6IjIwOTFiZDdiOThhOTRkOTc2NjJkZjQ2NzVhNTJmMTk1ZjM5Mzk0ZTJkMmM3NmRlMWFlMzhiZGE4MTZkYmMxNjAifQ%3D%3D'
-        }
-        
-        # Store ID for this scraping session (will be set by the scraper)
-        self.store_id = None
-    
-    def get_location_headers(self) -> Dict[str, str]:
-        """Get headers specific for location initialization."""
-        store_param = f"?store={self.store_id}&sort=pop" if self.store_id else "?sort=pop"
-        return {
-            'accept': '*/*',
-            'accept-language': 'en-US,en;q=0.9,es-US;q=0.8,es;q=0.7',
-            'priority': 'u=1, i',
-            'referer': f'https://www.locally.com/search/all/activities/depts{store_param}',
-            'sec-ch-ua': '"Google Chrome";v="137", "Chromium";v="137", "Not/A)Brand";v="24"',
-            'sec-ch-ua-mobile': '?0',
-            'sec-ch-ua-platform': '"macOS"',
-            'sec-fetch-dest': 'empty',
-            'sec-fetch-mode': 'cors',
-            'sec-fetch-site': 'same-origin',
-            'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36'
-        }
-    
-    def get_stock_headers(self, product_id: str) -> Dict[str, str]:
-        """Get headers specific for stock API calls."""
-        return {
-            'accept': 'application/json, text/javascript, */*; q=0.01',
-            'accept-language': 'en-US,en;q=0.9,es-US;q=0.8,es;q=0.7',
-            'cache-control': 'no-cache',
-            'pragma': 'no-cache',
-            'priority': 'u=1, i',
-            'referer': f'https://www.locally.com/product/{product_id}/',
-            'sec-ch-ua': '"Google Chrome";v="137", "Chromium";v="137", "Not/A)Brand";v="24"',
-            'sec-ch-ua-mobile': '?0',
-            'sec-ch-ua-platform': '"macOS"',
-            'sec-fetch-dest': 'empty',
-            'sec-fetch-mode': 'cors',
-            'sec-fetch-site': 'same-origin',
-            'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
-            'x-requested-with': 'XMLHttpRequest'
-        }
-    
-    def initialize_location(self, lat: float = 30.838215, lng: float = -87.20102) -> bool:
+        self.cookies = {}
+
+    def update_store_id(self, store_id: str):
+        self.store_id = store_id
+
+    def set_headers(self, headers: dict):
+        self.headers.update(headers)
+
+    def make_request(self, url: str, method: str = 'GET', **kwargs) -> Optional[requests.Response]:
         """
-        Initialize the geographic location for the scraping session.
-        
-        Args:
-            lat: Latitude coordinate
-            lng: Longitude coordinate
-            
-        Returns:
-            True if initialization was successful, False otherwise
-        """
-        url = f"https://www.locally.com/geo/point/{lat}/{lng}?switch_user_location=1&from=Locationswitcherinput.tsx+onSearchChange"
-        
-        headers = self.get_location_headers()
-        
-        try:
-            response = self.session.get(url, headers=headers, cookies=self.cookies)
-            print(f"Location initialization: {response.status_code}")
-            return response.status_code == 200
-        except Exception as e:
-            print(f"Error initializing location: {e}")
-            return False
-    
-    def make_request(self, url: str, headers: Optional[Dict[str, str]] = None, 
-                    timeout: int = 10) -> Optional[requests.Response]:
-        """
-        Make a standard HTTP request with error handling.
+        Make a request using the session with proper headers and error handling.
         
         Args:
             url: URL to request
-            headers: Optional custom headers (uses default if None)
-            timeout: Request timeout in seconds
+            method: HTTP method (GET, POST, etc.)
+            **kwargs: Additional arguments for the request
             
         Returns:
-            Response object or None if request failed
+            Response object or None if failed
         """
-        if headers is None:
-            headers = self.headers
-        
         try:
-            response = self.session.get(url, headers=headers, cookies=self.cookies, timeout=timeout)
+            # Use stored cookies if available
+            if self.cookies:
+                self.session.cookies.update(self.cookies)
+            
+            # Make the request
+            response = self.session.request(
+                method=method,
+                url=url,
+                headers=self.headers,
+                timeout=30,
+                **kwargs
+            )
+            
+            # Update cookies from response
+            self.cookies.update(self.session.cookies.get_dict())
+            
+            logger.debug(f"Request to {url}: {response.status_code}")
             return response
-        except Exception as e:
-            print(f"Error making request to {url}: {e}")
+            
+        except requests.RequestException as e:
+            logger.error(f"Request failed for {url}: {e}")
             return None
-    
-    def update_cookies(self, new_cookies: Dict[str, str]):
-        """Update session cookies."""
-        self.cookies.update(new_cookies)
-    
-    def update_store_id(self, store_id: str):
-        """Update the store ID for scraping."""
-        self.store_id = store_id
-        # Update referer header with new store ID
-        if store_id:
-            self.headers['referer'] = f'https://www.locally.com/search/all/activities/depts?store={store_id}&sort=pop'
-        else:
-            self.headers['referer'] = 'https://www.locally.com/search/all/activities/depts?sort=pop' 
+
+    def initialize_location(self, lat: float, lng: float) -> bool:
+        """
+        Initializes the user's location by making a GET request to a specific endpoint.
+        This is a crucial step for the scraper to see store-specific data.
+        """
+        url = f"{self.base_url}/geo/point/{lat}/{lng}?switch_user_location=1"
+        
+        referer_url = f"{self.base_url}/search/all/activities/depts?sort=pop"
+        if self.store_id:
+            referer_url = f"{self.base_url}/search/all/activities/depts?store={self.store_id}&sort=pop"
+            
+        temp_headers = self.headers.copy()
+        temp_headers['referer'] = referer_url
+        temp_headers['accept'] = '*/*'
+
+        try:
+            response = self.session.get(url, headers=temp_headers, timeout=15)
+            
+            if response.status_code == 200:
+                self.cookies.update(self.session.cookies.get_dict())
+                logger.debug(f"Location initialized for lat={lat}, lng={lng}")
+                return True
+            else:
+                logger.error(f"Failed to initialize location. Status: {response.status_code}. URL: {url}")
+                return False
+        except requests.RequestException as e:
+            logger.error(f"Exception during location initialization: {e}")
+            return False
+
+    def close(self):
+        self.session.close() 

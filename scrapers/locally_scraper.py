@@ -1,330 +1,310 @@
-"""Main locally scraper that orchestrates all scraping components."""
-
 import time
-from typing import List, Tuple, Dict
+import json
+from typing import List, Dict
 from urllib.parse import urljoin
-
 from .page_scraper import PageScraper
 from .product_scraper import ProductScraper
-from utils.data_export import DataExporter
 from models.product import Product
+from models.variant import Variant
+from pathlib import Path
+from utils.logging_config import get_logger
 
+logger = get_logger(__name__)
 
 class LocallyScraper:
-    """Main scraper that orchestrates all scraping operations."""
     
-    def __init__(self, enable_stock_scraping: bool = True, output_dir: str = ".", store_config: dict = None, filename_suffix: str = ""):
-        """
-        Initialize the main scraper.
-        
-        Args:
-            enable_stock_scraping: Whether to scrape stock information for variants (deprecated - now always extracted from product page)
-            output_dir: Directory to save output files
-            store_config: Dictionary with store configuration (store_id, lat, lng, zipcode)
-            filename_suffix: Suffix for output filenames (e.g., "85940_123")
-        """
+    def __init__(self, output_dir: str = ".", store_config: dict = None):
         self.store_config = store_config or {'store_id': '85940', 'lat': 30.838215, 'lng': -87.20102, 'zipcode': '123'}
+        self.output_dir = output_dir
         
         self.page_scraper = PageScraper()
         self.product_scraper = ProductScraper()
-        self.data_exporter = DataExporter(output_dir, filename_suffix=filename_suffix)
         
-        # Configure scrapers with store information
         self.page_scraper.update_store_id(self.store_config['store_id'])
         self.product_scraper.update_store_id(self.store_config['store_id'])
-        
-        # Note: enable_stock_scraping is now deprecated since we extract everything from product pages
-        self.enable_stock_scraping = True  # Always True since we get it from product page HTML
     
     def initialize(self) -> bool:
-        """Initialize the scraping session."""
-        print(f"Initializing location for store {self.store_config['store_id']} at coordinates ({self.store_config['lat']}, {self.store_config['lng']})...")
+        logger.debug(f"Initializing location for store {self.store_config['store_id']}...")
         return self.page_scraper.initialize_location(
             lat=self.store_config['lat'], 
             lng=self.store_config['lng']
         )
     
-    def update_configuration(self, store_id: str = None, calls_per_second: float = None, enable_stock_scraping: bool = None):
-        """
-        Update scraper configuration.
-        
-        Args:
-            store_id: Store ID to scrape from
-            calls_per_second: Deprecated - no longer needed since we don't use stock API
-            enable_stock_scraping: Deprecated - stock info always extracted from product pages
-        """
+    def update_configuration(self, store_id: str = None):
         if store_id:
             self.page_scraper.store_id = store_id
             self.product_scraper.store_id = store_id
-        
-        # Note: calls_per_second and enable_stock_scraping are deprecated
-        # since we no longer make separate stock API calls
-    
-    def get_status(self) -> dict:
-        """Get current scraper status and configuration."""
-        return {
-            'store_id': self.store_config['store_id'],
-            'zipcode': self.store_config['zipcode'],
-            'lat': self.store_config['lat'],
-            'lng': self.store_config['lng'],
-            'stock_scraping_enabled': True,  # Always True since we extract from HTML
-            'rate_limit': None,  # No longer applicable
-            'output_directory': self.data_exporter.output_dir
-        }
     
     def scrape_all_products_with_delays(self, 
-                                       start_page: int = 0,
                                        page_delay: float = 5.0,
                                        max_product_workers: int = 5,
-                                       max_stock_workers: int = 3,  # Deprecated parameter
-                                       save_progress_every: int = 5) -> List[dict]:
-        """
-        Main scraping function that processes all pages with delays.
-        
-        Args:
-            start_page: Starting page number
-            page_delay: Delay in seconds between pages
-            max_product_workers: Maximum workers for product detail scraping
-            max_stock_workers: Deprecated - no longer used since stock comes from product pages
-            save_progress_every: Save progress every N pages
-            
-        Returns:
-            List of unified product dictionaries with all information
-        """
-        all_products = []
-        page = start_page
-        seen_product_ids = set()
-        
+                                       max_page_workers: int = 3,
+                                       save_progress_every: int = 5,
+                                       start_page: int = 0,
+                                       max_pages: int = None) -> List[dict]:
         if not self.initialize():
-            print("Failed to initialize. Aborting scraping.")
+            logger.error("Failed to initialize. Aborting scraping.")
             return []
         
-        print("Starting page-by-page scraping with delays...")
-        print("Note: Extracting unified product data with stock info from product pages!")
-        
-        while True:
-            print(f"\n{'='*60}")
-            print(f"PROCESSING PAGE {page}")
-            print(f"{'='*60}")
-            
-            # Scrape products from the listing page (basic info)
-            general_products = self.page_scraper.scrape_page(page)
-            
-            if not general_products:
-                print(f"No products found on page {page}. Ending scraping.")
-                break
-            
-            # Filter new products
-            new_products = [p for p in general_products if p.external_id not in seen_product_ids]
-            
-            if not new_products:
-                print(f"All products on page {page} have already been processed. Ending scraping.")
-                break
-            
-            print(f"New products to process: {len(new_products)}")
-            
-            # Track seen IDs
-            for product in new_products:
-                seen_product_ids.add(product.external_id)
-            
-            # Get detailed information and merge with general data
-            unified_products = self._get_unified_product_data(new_products, max_product_workers, page)
-            
-            # Add to main list
-            all_products.extend(unified_products)
-            
-            print(f"Page {page} completed: {len(unified_products)} unified products obtained")
-            
-            # Save progress periodically
-            if page % save_progress_every == 0:
-                print(f"Saving progress up to page {page}...")
-                self.save_results(all_products)
-            
-            # Wait before processing next page
-            if page_delay > 0:
-                print(f"Waiting {page_delay} seconds before processing page {page + 1}...")
-                time.sleep(page_delay)
-            
-            page += 1
-        
-        print(f"\n{'='*60}")
-        print(f"SCRAPING COMPLETED")
-        print(f"{'='*60}")
-        print(f"Total pages processed: {page-1}")
-        print(f"Total unified products: {len(all_products)}")
-        
-        return all_products
-    
-    def scrape_specific_pages(self, pages: List[int], **kwargs) -> List[dict]:
-        """
-        Scrape specific pages only.
-        
-        Args:
-            pages: List of page numbers to scrape
-            **kwargs: Additional arguments passed to scraping methods
-            
-        Returns:
-            List of unified product dictionaries
-        """
-        all_products = []
-        
-        if not self.initialize():
-            print("Failed to initialize. Aborting scraping.")
-            return []
-        
-        for page in pages:
-            print(f"Scraping page {page}...")
-            
-            # Get general products from listing
-            general_products = self.page_scraper.scrape_page(page)
-            if not general_products:
-                continue
-            
-            # Get unified data
-            unified_products = self._get_unified_product_data(
-                general_products, 
-                kwargs.get('max_product_workers', 5), 
-                page
+        if max_page_workers > 1:
+            logger.info(f"Starting PARALLEL page scraping with {max_page_workers} workers...")
+            return self._scrape_pages_parallel(
+                page_delay, max_product_workers, max_page_workers, 
+                save_progress_every, start_page, max_pages
             )
-            
-            all_products.extend(unified_products)
-        
-        return all_products
+        else:
+            logger.info("Starting SEQUENTIAL page scraping...")
+            return self._scrape_pages_sequential(
+                page_delay, max_product_workers, 
+                save_progress_every, start_page, max_pages
+            )
     
-    def _get_unified_product_data(self, general_products: List[Product], max_workers: int, page: int) -> List[dict]:
-        """
-        Combine general product data with detailed product data into unified records.
-        
-        Args:
-            general_products: List of general Product objects from listing page
-            max_workers: Maximum workers for detail scraping
-            page: Current page number
-            
-        Returns:
-            List of unified product dictionaries
-        """
+    def _get_detailed_products(self, general_products: List[Product], page: int, max_workers: int = 5) -> List[dict]:
         unified_products = []
         
-        # Get product URLs for detail scraping
+        # Debug: Log general products URLs
+        logger.info(f"Processing {len(general_products)} general products from page {page}")
+        
         product_urls = [urljoin(self.page_scraper.base_url, p.url) for p in general_products if p.url]
         
+        logger.info(f"Generated {len(product_urls)} product URLs for detailed scraping")
+        
         if product_urls:
-            # Initialize location before scraping product details
             self.product_scraper.initialize_location(
                 lat=self.store_config['lat'], 
                 lng=self.store_config['lng']
             )
             
-            # Get detailed information
             detailed_products = self.product_scraper.get_product_details_batch(
-                product_urls, max_workers
+                product_urls, 
+                max_workers=max_workers
             )
             
-            # Create a lookup dict for detailed products
-            detailed_lookup = {p.external_id: p for p in detailed_products}
+            logger.info(f"Retrieved {len(detailed_products)} detailed products")
             
-            # Merge general and detailed data
+            detailed_products_dict = {p.external_id: p for p in detailed_products}
+            
             for general_product in general_products:
-                # Start with general product data
-                unified_data = general_product.to_dict()
-                unified_data['page_number'] = page
-                
-                # Add store configuration data
-                unified_data['store_id'] = self.store_config['store_id']
-                unified_data['lat'] = self.store_config['lat']
-                unified_data['lng'] = self.store_config['lng']
-                unified_data['zipcode'] = self.store_config['zipcode']
-                unified_data['store_name'] = self.store_config['store_name']
-                
-                # Find corresponding detailed product
-                detailed_product = detailed_lookup.get(general_product.external_id)
-                
-                if detailed_product:
-                    # Merge detailed data (prioritizing detailed over general for conflicts)
-                    detailed_data = detailed_product.to_dict()
+                if general_product.external_id in detailed_products_dict:
+                    detailed_product = detailed_products_dict[general_product.external_id]
                     
-                    # Get the product's main SKU from the general data (listing page)
-                    product_sku = unified_data.get('sku')
+                    merged_product = self._merge_product_data(general_product, detailed_product)
+                    merged_product['page_number'] = page
                     
-                    # Ensure all variants inherit the main product SKU, which comes from the listing page
-                    if product_sku and 'variants' in detailed_data:
-                        for i in range(len(detailed_data['variants'])):
-                            detailed_data['variants'][i]['sku'] = product_sku
+                    if not merged_product['variants']:
+                        logger.warning(f"  ⚠️ Product {merged_product['external_id']}: No variants found")
                     
-                    # Merge fields, keeping general data for fields that detailed doesn't have
-                    # and detailed data for fields it does have
-                    unified_data.update({
-                        # Keep general data for these fields (usually better from listing)
-                        'url': unified_data.get('url', detailed_data.get('url', '')),
-                        'sku': product_sku,  # Always use the SKU from the listing page
-                        'currency': unified_data.get('currency', 'USD'),
-                        
-                        # Use detailed data for these fields (better from product page)
-                        'description': detailed_data.get('description', unified_data.get('description', '')),
-                        'images': detailed_data.get('images', []),
-                        'images_count': len(detailed_data.get('images', [])),
-                        'variants': detailed_data.get('variants', []),
-                        'variants_count': len(detailed_data.get('variants', [])),
-                        
-                        # Price - prefer detailed if available
-                        'external_sell_price': detailed_data.get('external_sell_price', unified_data.get('external_sell_price', 0.0)),
-                    })
-                    
-                    print(f"✓ Merged data for {general_product.name} (variants: {len(detailed_data.get('variants', []))})")
+                    unified_products.append(merged_product)
                 else:
-                    print(f"⚠ No detailed data for {general_product.name}")
-                    # Add default values for missing detailed fields
-                    unified_data.update({
-                        'description': '',
-                        'variants': [],
-                        'variants_count': 0,
-                        'images_count': len(unified_data.get('images', [])),
-                        'currency': unified_data.get('currency', 'USD')
-                    })
-                    # Store configuration is already added above
-                
-                unified_products.append(unified_data)
+                    logger.warning(f"  ❌ Product {general_product.external_id}: Not found in detailed results, using general data only")
+                    general_dict = general_product.to_dict()
+                    general_dict['page_number'] = page
+                    unified_products.append(general_dict)
         else:
-            # Handle case where there are no product URLs
+            logger.warning("No product URLs found - using general product data only")
             for general_product in general_products:
-                unified_data = general_product.to_dict()
-                unified_data['page_number'] = page
-                
-                # Add store configuration data
-                unified_data['store_id'] = self.store_config['store_id']
-                unified_data['lat'] = self.store_config['lat']
-                unified_data['lng'] = self.store_config['lng']
-                unified_data['zipcode'] = self.store_config['zipcode']
-                unified_data['store_name'] = self.store_config['store_name']
-                
-                # Add default values for missing detailed fields
-                unified_data.update({
-                    'description': '',
-                    'variants': [],
-                    'variants_count': 0,
-                    'images_count': len(unified_data.get('images', [])),
-                    'currency': unified_data.get('currency', 'USD')
-                })
-                
-                unified_products.append(unified_data)
+                general_dict = general_product.to_dict()
+                general_dict['page_number'] = page
+                unified_products.append(general_dict)
         
         return unified_products
     
-    def save_results(self, products: List[dict]):
-        """
-        Save unified scraping results to files.
+    def _merge_product_data(self, general_product: Product, detailed_product: Product) -> dict:
+        merged_data = detailed_product.to_dict()
         
-        Args:
-            products: List of unified product dictionaries
-        """
-        # Save unified products
-        self.data_exporter.save_unified_products(products)
+        if not merged_data.get('name') and general_product.name:
+            merged_data['name'] = general_product.name
         
-        # Print statistics
-        self.data_exporter.print_unified_statistics(products)
+        if not merged_data.get('brand') and general_product.brand:
+            merged_data['brand'] = general_product.brand
         
-        print(f"\nScraping completed successfully!")
-        print(f"Generated files:")
-        print(f"  - products.csv ({len(products)} products)")
-        print(f"  - products.json")
-        print(f"\nNote: All product data unified with variant stock information!") 
+        if not merged_data.get('url') and general_product.url:
+            merged_data['url'] = general_product.url
+        
+        if not merged_data.get('external_sell_price') and general_product.external_sell_price:
+            merged_data['external_sell_price'] = general_product.external_sell_price
+        
+        if not merged_data.get('sku') and general_product.sku:
+            merged_data['sku'] = general_product.sku
+        
+        if not merged_data.get('condition') and general_product.condition:
+            merged_data['condition'] = general_product.condition
+        
+        if not merged_data.get('currency') and general_product.currency:
+            merged_data['currency'] = general_product.currency
+        
+        if not merged_data.get('images') and general_product.images:
+            merged_data['images'] = general_product.images
+        
+        final_sku = merged_data.get('sku', '')
+        if final_sku and merged_data.get('variants'):
+            for variant in merged_data['variants']:
+                if isinstance(variant, dict):
+                    variant['sku'] = final_sku
+        
+        # Asignar imagen del producto a variantes que no tengan imagen
+        product_images = merged_data.get('images', [])
+        main_image = product_images[0] if product_images else ''
+        
+        if main_image and merged_data.get('variants'):
+            for variant in merged_data['variants']:
+                if isinstance(variant, dict) and not variant.get('image'):
+                    variant['image'] = main_image
+        
+        merged_data['store_id'] = self.store_config.get('store_id', '')
+        merged_data['lat'] = self.store_config.get('lat', 0.0)
+        merged_data['lng'] = self.store_config.get('lng', 0.0)
+        merged_data['zipcode'] = self.store_config.get('zipcode', '')
+        merged_data['store_name'] = self.store_config.get('store_name', '')
+        
+        return merged_data
+
+    def log_results(self, products: List[dict]):
+        if not products:
+            return
+
+        products_with_variants = sum(1 for p in products if p.get('variants'))
+        total_variants = sum(len(p.get('variants', [])) for p in products)
+
+        summary = (
+            f"Total products: {len(products)}, "
+            f"Products with variants: {products_with_variants}, "
+            f"Total variants: {total_variants}"
+        )
+
+        if products_with_variants > 0:
+            avg_variants = total_variants / products_with_variants
+            summary += f", Average variants: {avg_variants:.2f}"
+
+        logger.info(summary)
+
+    def _scrape_pages_sequential(self, page_delay: float, max_product_workers: int, 
+                                save_progress_every: int, start_page: int, max_pages: int) -> List[dict]:
+        all_products = []
+        page = start_page
+        seen_product_ids = set()
+        
+        while True:
+            if max_pages is not None and (page - start_page) >= max_pages:
+                logger.info(f"Reached maximum pages limit ({max_pages}). Ending scraping.")
+                break
+                
+            logger.info(f"--- Processing page {page} ---")
+            
+            general_products = self.page_scraper.scrape_page(page)
+            
+            if not general_products:
+                logger.info(f"No products found on page {page}. Ending scraping.")
+                break
+            
+            new_products = [p for p in general_products if p.external_id not in seen_product_ids]
+            
+            if not new_products:
+                logger.info(f"All products on page {page} have already been processed. Ending scraping.")
+                break
+            
+            logger.info(f"New products to process: {len(new_products)}")
+            
+            for product in new_products:
+                seen_product_ids.add(product.external_id)
+            
+            unified_products = self._get_detailed_products(new_products, page, max_product_workers)
+            
+            all_products.extend(unified_products)
+            
+            logger.info(f"Page {page} completed: {len(unified_products)} unified products obtained")
+
+            if page % save_progress_every == 0:
+                logger.info(f"Saving progress up to page {page}...")
+                self.log_results(all_products)
+            
+            if page_delay > 0:
+                logger.info(f"Waiting {page_delay} seconds before processing page {page + 1}...")
+                time.sleep(page_delay)
+            
+            page += 1
+        
+        logger.info("--- SEQUENTIAL SCRAPING COMPLETED ---")
+        logger.info(f"Total pages processed: {page-1 if page > 0 else 0}")
+        logger.info(f"Total unified products: {len(all_products)}")
+        
+        return all_products
+
+    def _scrape_pages_parallel(self, page_delay: float, max_product_workers: int, max_page_workers: int,
+                              save_progress_every: int, start_page: int, max_pages: int) -> List[dict]:
+        import concurrent.futures
+        import threading
+        
+        all_products = []
+        seen_product_ids = set()
+        page_lock = threading.Lock()
+        
+        max_pages_to_process = max_pages if max_pages is not None else 50
+        
+        pages_to_scrape = list(range(start_page, start_page + max_pages_to_process))
+        
+        logger.info(f"Processing {len(pages_to_scrape)} pages in parallel with {max_page_workers} workers...")
+        
+        def process_single_page(page_num):
+            try:
+                page_scraper = PageScraper()
+                page_scraper.update_store_id(self.store_config['store_id'])
+                page_scraper.initialize_location(
+                    lat=self.store_config['lat'], 
+                    lng=self.store_config['lng']
+                )
+                
+                logger.info(f"--- Processing page {page_num} ---")
+                general_products = page_scraper.scrape_page(page_num)
+                
+                if not general_products:
+                    logger.info(f"No products found on page {page_num}")
+                    return []
+                
+                with page_lock:
+                    new_products = [p for p in general_products if p.external_id not in seen_product_ids]
+                    for product in new_products:
+                        seen_product_ids.add(product.external_id)
+                
+                if not new_products:
+                    logger.info(f"No new products on page {page_num}")
+                    return []
+                
+                logger.info(f"Page {page_num}: {len(new_products)} new products")
+                
+                unified_products = self._get_detailed_products(new_products, page_num, max_product_workers)
+                
+                logger.info(f"Page {page_num} completed: {len(unified_products)} unified products")
+                
+                if page_delay > 0:
+                    time.sleep(page_delay)
+                
+                return unified_products
+                
+            except Exception as e:
+                logger.error(f"Error processing page {page_num}: {e}")
+                return []
+        
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_page_workers) as executor:
+            future_to_page = {
+                executor.submit(process_single_page, page): page 
+                for page in pages_to_scrape
+            }
+            
+            for future in concurrent.futures.as_completed(future_to_page):
+                page_num = future_to_page[future]
+                try:
+                    page_products = future.result()
+                    all_products.extend(page_products)
+                    
+                    if len(all_products) % (save_progress_every * 10) == 0:
+                        logger.info(f"Progress: {len(all_products)} total products collected so far...")
+                        
+                except Exception as e:
+                    logger.error(f"Page {page_num} generated an exception: {e}")
+        
+        logger.info("--- PARALLEL SCRAPING COMPLETED ---")
+        logger.info(f"Total pages processed: {len(pages_to_scrape)}")
+        logger.info(f"Total unified products: {len(all_products)}")
+        
+        return all_products

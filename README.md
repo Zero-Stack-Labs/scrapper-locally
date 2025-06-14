@@ -219,3 +219,283 @@ The new version is a drop-in replacement:
 ---
 
 **Result**: A production-ready, maintainable scraper with 50% less data redundancy, proper rate limiting, and modular architecture. 🎉
+
+# Scraper Lambda
+
+Un servicio de web scraping para obtener información de productos de tiendas Locally.
+
+## Características
+
+- **API Asíncrona**: El scraping se ejecuta en background para evitar timeouts
+- **Tracking de Progreso**: Monitoreo en tiempo real del estado del proceso
+- **Múltiples Tiendas**: Procesa múltiples stores en una sola request
+- **Análisis de Stock**: Genera análisis automático de disponibilidad
+- **Configuración Flexible**: Parámetros personalizables por request
+
+## API Endpoints
+
+### 1. Iniciar Scraping (Asíncrono)
+```http
+POST /scrape
+```
+
+**Request Body:**
+```json
+{
+  "store_configurations": [
+    {
+      "store_id": "12345",
+      "zipcode": "90210"
+    },
+    {
+      "store_id": "67890", 
+      "zipcode": "10001"
+    }
+  ],
+  "page_delay": 2.0,
+  "max_product_workers": 5,
+  "save_every": 10,
+  "output_dir": "./scraping_results"
+}
+```
+
+**Response (Inmediata):**
+```json
+{
+  "task_id": "abc123-def456-ghi789",
+  "status": "started",
+  "message": "Scraping process initiated successfully",
+  "estimated_time": "60 seconds (approximately)",
+  "endpoints": {
+    "status": "/scrape/status/abc123-def456-ghi789",
+    "results": "/scrape/results/abc123-def456-ghi789"
+  }
+}
+```
+
+### 2. Consultar Estado del Scraping
+```http
+GET /scrape/status/{task_id}
+```
+
+**Response:**
+```json
+{
+  "status": "processing",
+  "message": "Scraping in progress...",
+  "started_at": "2024-01-20T10:30:00",
+  "progress": {
+    "total_stores": 2,
+    "completed_stores": 1,
+    "current_store": "Store 67890 - Zipcode 10001",
+    "total_products": 45
+  },
+  "result": null,
+  "error": null
+}
+```
+
+### 3. Obtener Resultados
+```http
+GET /scrape/results/{task_id}
+```
+
+**Response (cuando esté completo):**
+```json
+{
+  "results": [
+    {
+      "store_id": "12345",
+      "zipcode": "90210", 
+      "products_scraped": 23
+    },
+    {
+      "store_id": "67890",
+      "zipcode": "10001",
+      "products_scraped": 45
+    }
+  ],
+  "total_products": 68,
+  "total_stores_processed": 2,
+  "analysis_generated": true,
+  "completed_at": "2024-01-20T10:32:15"
+}
+```
+
+**Response (si aún está procesando):**
+```json
+{
+  "status_code": 202,
+  "detail": {
+    "message": "Task still processing",
+    "status": "processing",
+    "progress": {
+      "total_stores": 2,
+      "completed_stores": 1,
+      "current_store": "Store 67890 - Zipcode 10001",
+      "total_products": 45
+    }
+  }
+}
+```
+
+## Estados de Tareas
+
+- **`started`**: Tarea iniciada, esperando procesamiento
+- **`processing`**: Scraping en progreso
+- **`completed`**: Scraping finalizado exitosamente  
+- **`failed`**: Error durante el procesamiento
+
+## Instalación y Uso
+
+### 1. Instalar Dependencias
+```bash
+# Crear entorno virtual
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+# venv\Scripts\activate   # Windows
+
+# Instalar dependencias
+pip install -r requirements.txt
+```
+
+### 2. Ejecutar Servidor
+```bash
+uvicorn app:app --host 0.0.0.0 --port 8000 --reload
+```
+
+### 3. Ejemplo de Uso con cURL
+
+**Iniciar Scraping:**
+```bash
+curl -X POST "http://localhost:8000/scrape" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "store_configurations": [
+      {"store_id": "12345", "zipcode": "90210"}
+    ],
+    "page_delay": 2.0,
+    "max_product_workers": 5,
+    "save_every": 10,
+    "output_dir": "./results"
+  }'
+```
+
+**Consultar Estado:**
+```bash
+curl "http://localhost:8000/scrape/status/abc123-def456-ghi789"
+```
+
+**Obtener Resultados:**
+```bash
+curl "http://localhost:8000/scrape/results/abc123-def456-ghi789"
+```
+
+### 4. Ejemplo con Python
+```python
+import requests
+import time
+
+# Iniciar scraping
+response = requests.post("http://localhost:8000/scrape", json={
+    "store_configurations": [
+        {"store_id": "12345", "zipcode": "90210"}
+    ],
+    "page_delay": 2.0,
+    "max_product_workers": 5, 
+    "save_every": 10,
+    "output_dir": "./results"
+})
+
+task_data = response.json()
+task_id = task_data["task_id"]
+
+print(f"Task iniciada: {task_id}")
+
+# Monitorear progreso
+while True:
+    status_response = requests.get(f"http://localhost:8000/scrape/status/{task_id}")
+    status_data = status_response.json()
+    
+    print(f"Estado: {status_data['status']}")
+    print(f"Progreso: {status_data['progress']}")
+    
+    if status_data["status"] in ["completed", "failed"]:
+        break
+    
+    time.sleep(10)  # Esperar 10 segundos
+
+# Obtener resultados
+if status_data["status"] == "completed":
+    results_response = requests.get(f"http://localhost:8000/scrape/results/{task_id}")
+    results = results_response.json()
+    print(f"Productos scraped: {results['total_products']}")
+else:
+    print(f"Error: {status_data['error']}")
+```
+
+## Configuración
+
+### Parámetros del Request
+
+- **`locations`**: Lista de ubicaciones a procesar  
+- **`max_product_workers`**: Número de threads para scraping de productos (default: 10)
+- **`max_page_workers`**: Número de threads para scraping de páginas (default: 3)
+- **`page_delay`**: Delay entre páginas en segundos (default: 5.0)
+
+- **`page_delay`**: Delay entre páginas (segundos, default: 2.0)
+- **`max_product_workers`**: Workers concurrentes (default: 5)  
+- **`save_every`**: Guardar progreso cada N productos (default: 10)
+- **`output_dir`**: Directorio de salida para archivos JSON
+
+### Archivos Generados
+
+El scraper genera varios archivos en el directorio especificado:
+
+- `products_{store_id}_{zipcode}_{timestamp}.json`: Productos por tienda
+- `stock_analysis_{timestamp}.json`: Análisis de stock consolidado
+
+## Arquitectura
+
+El proyecto sigue una arquitectura en capas:
+
+```
+├── controllers/     # Endpoints de API
+├── services/        # Lógica de negocio  
+├── repositories/    # Acceso a datos
+├── scrapers/        # Web scrapers
+├── models/          # Modelos de datos
+├── analyzers/       # Análisis de datos
+├── requests/        # Schemas de requests
+└── utils/           # Utilidades
+```
+
+## Desarrollo
+
+### Ejecutar Tests
+```bash
+pytest tests/
+```
+
+### Linting
+```bash
+flake8 .
+black .
+```
+
+### Docker
+```bash
+# Build
+docker build -t scraper-lambda .
+
+# Run
+docker run -p 8000:8000 scraper-lambda
+```
+
+## Beneficios de la API Asíncrona
+
+1. **No Timeouts**: El cliente recibe respuesta inmediata
+2. **Monitoreo**: Progreso en tiempo real del scraping
+3. **Escalabilidad**: Múltiples tareas pueden ejecutarse simultáneamente
+4. **Reliability**: Mejor manejo de errores y recuperación
+5. **UX**: Mejor experiencia para el usuario final
