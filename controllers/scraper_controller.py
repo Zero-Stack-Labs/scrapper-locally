@@ -23,6 +23,7 @@ class ScraperController:
         scraper_params = {
             "page_delay": request.page_delay,
             "max_product_workers": request.max_product_workers,
+            "max_page_workers": request.max_page_workers,
             "save_every": request.save_every,
             "max_pages": request.max_pages
         }

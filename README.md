@@ -438,9 +438,10 @@ else:
 
 ### Parámetros del Request
 
-- **`locations`**: Lista de ubicaciones a procesar
-  - `store_id`: ID de la tienda
-  - `zipcode`: Código postal de la ubicación
+- **`locations`**: Lista de ubicaciones a procesar  
+- **`max_product_workers`**: Número de threads para scraping de productos (default: 10)
+- **`max_page_workers`**: Número de threads para scraping de páginas (default: 3)
+- **`page_delay`**: Delay entre páginas en segundos (default: 5.0)
 
 - **`page_delay`**: Delay entre páginas (segundos, default: 2.0)
 - **`max_product_workers`**: Workers concurrentes (default: 5)  

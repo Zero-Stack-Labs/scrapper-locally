@@ -1,12 +1,31 @@
 import requests
 from typing import Optional
 import logging
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 logger = logging.getLogger(__name__)
 
 class BaseScraper:
     def __init__(self):
         self.session = requests.Session()
+        
+        retry_strategy = Retry(
+            total=3,
+            status_forcelist=[429, 500, 502, 503, 504],
+            backoff_factor=1
+        )
+        
+        adapter = HTTPAdapter(
+            pool_connections=100,
+            pool_maxsize=300,
+            max_retries=retry_strategy,
+            pool_block=False
+        )
+        
+        self.session.mount("http://", adapter)
+        self.session.mount("https://", adapter)
+        
         self.base_url = "https://www.locally.com"
         self.store_id: Optional[str] = None
         self.headers = {

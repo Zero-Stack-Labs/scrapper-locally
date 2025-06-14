@@ -585,6 +585,9 @@ class ProductScraper(BaseScraper):
 
 
     def get_product_details_batch(self, product_urls: List[str], max_workers: int = 5) -> List[Product]:
+        pool_size = 300
+        max_safe_workers = int(pool_size * 0.8)
+        max_workers = min(max_workers, max_safe_workers)
         import concurrent.futures
         
         detailed_products = []

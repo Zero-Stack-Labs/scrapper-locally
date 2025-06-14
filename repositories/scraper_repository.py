@@ -12,7 +12,8 @@ class ScraperRepository:
     def scrape_single_store(self, store_id: str, zipcode: str, lat: float, lng: float,
                            store_name: str = "",
                            page_delay: float = 2.0, 
-                           max_product_workers: int = 5, 
+                           max_product_workers: int = 5,
+                           max_page_workers: int = 3,
                            save_every: int = 10,
                            max_pages: int = None) -> Dict[str, Any]:
         logger.info(f"Starting scraping for store {store_id}")
@@ -34,6 +35,7 @@ class ScraperRepository:
             products = scraper.scrape_all_products_with_delays(
                 page_delay=page_delay,
                 max_product_workers=max_product_workers,
+                max_page_workers=max_page_workers,
                 save_progress_every=save_every,
                 max_pages=max_pages
             )

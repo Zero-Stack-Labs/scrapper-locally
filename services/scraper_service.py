@@ -32,6 +32,7 @@ class ScraperService:
                 store_name=store_name,
                 page_delay=scraper_params.get("page_delay", 2),
                 max_product_workers=scraper_params.get("max_product_workers", 5),
+                max_page_workers=scraper_params.get("max_page_workers", 3),
                 save_every=scraper_params.get("save_every", 10),
                 max_pages=scraper_params.get("max_pages", None)
             )

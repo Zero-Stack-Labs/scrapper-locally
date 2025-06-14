@@ -38,64 +38,26 @@ class LocallyScraper:
     def scrape_all_products_with_delays(self, 
                                        page_delay: float = 5.0,
                                        max_product_workers: int = 5,
+                                       max_page_workers: int = 3,
                                        save_progress_every: int = 5,
                                        start_page: int = 0,
                                        max_pages: int = None) -> List[dict]:
-        all_products = []
-        page = start_page
-        seen_product_ids = set()
-        
         if not self.initialize():
             logger.error("Failed to initialize. Aborting scraping.")
             return []
         
-        logger.info("Starting page-by-page scraping...")
-        
-        while True:
-            if max_pages is not None and (page - start_page) >= max_pages:
-                logger.info(f"Reached maximum pages limit ({max_pages}). Ending scraping.")
-                break
-                
-            logger.info(f"--- Processing page {page} ---")
-            
-            general_products = self.page_scraper.scrape_page(page)
-            
-            if not general_products:
-                logger.info(f"No products found on page {page}. Ending scraping.")
-                break
-            
-            new_products = [p for p in general_products if p.external_id not in seen_product_ids]
-            
-            if not new_products:
-                logger.info(f"All products on page {page} have already been processed. Ending scraping.")
-                break
-            
-            logger.info(f"New products to process: {len(new_products)}")
-            
-            for product in new_products:
-                seen_product_ids.add(product.external_id)
-            
-            unified_products = self._get_detailed_products(new_products, page, max_product_workers)
-            
-            all_products.extend(unified_products)
-            
-            logger.info(f"Page {page} completed: {len(unified_products)} unified products obtained")
-
-            if page % save_progress_every == 0:
-                logger.info(f"Saving progress up to page {page}...")
-                self.log_results(all_products)
-            
-            if page_delay > 0:
-                logger.info(f"Waiting {page_delay} seconds before processing page {page + 1}...")
-                time.sleep(page_delay)
-            
-            page += 1
-        
-        logger.info("--- SCRAPING COMPLETED ---")
-        logger.info(f"Total pages processed: {page-1 if page > 0 else 0}")
-        logger.info(f"Total unified products: {len(all_products)}")
-        
-        return all_products
+        if max_page_workers > 1:
+            logger.info(f"Starting PARALLEL page scraping with {max_page_workers} workers...")
+            return self._scrape_pages_parallel(
+                page_delay, max_product_workers, max_page_workers, 
+                save_progress_every, start_page, max_pages
+            )
+        else:
+            logger.info("Starting SEQUENTIAL page scraping...")
+            return self._scrape_pages_sequential(
+                page_delay, max_product_workers, 
+                save_progress_every, start_page, max_pages
+            )
     
     def _get_detailed_products(self, general_products: List[Product], page: int, max_workers: int = 5) -> List[dict]:
         unified_products = []
@@ -215,3 +177,134 @@ class LocallyScraper:
             summary += f", Average variants: {avg_variants:.2f}"
 
         logger.info(summary)
+
+    def _scrape_pages_sequential(self, page_delay: float, max_product_workers: int, 
+                                save_progress_every: int, start_page: int, max_pages: int) -> List[dict]:
+        all_products = []
+        page = start_page
+        seen_product_ids = set()
+        
+        while True:
+            if max_pages is not None and (page - start_page) >= max_pages:
+                logger.info(f"Reached maximum pages limit ({max_pages}). Ending scraping.")
+                break
+                
+            logger.info(f"--- Processing page {page} ---")
+            
+            general_products = self.page_scraper.scrape_page(page)
+            
+            if not general_products:
+                logger.info(f"No products found on page {page}. Ending scraping.")
+                break
+            
+            new_products = [p for p in general_products if p.external_id not in seen_product_ids]
+            
+            if not new_products:
+                logger.info(f"All products on page {page} have already been processed. Ending scraping.")
+                break
+            
+            logger.info(f"New products to process: {len(new_products)}")
+            
+            for product in new_products:
+                seen_product_ids.add(product.external_id)
+            
+            unified_products = self._get_detailed_products(new_products, page, max_product_workers)
+            
+            all_products.extend(unified_products)
+            
+            logger.info(f"Page {page} completed: {len(unified_products)} unified products obtained")
+
+            if page % save_progress_every == 0:
+                logger.info(f"Saving progress up to page {page}...")
+                self.log_results(all_products)
+            
+            if page_delay > 0:
+                logger.info(f"Waiting {page_delay} seconds before processing page {page + 1}...")
+                time.sleep(page_delay)
+            
+            page += 1
+        
+        logger.info("--- SEQUENTIAL SCRAPING COMPLETED ---")
+        logger.info(f"Total pages processed: {page-1 if page > 0 else 0}")
+        logger.info(f"Total unified products: {len(all_products)}")
+        
+        return all_products
+
+    def _scrape_pages_parallel(self, page_delay: float, max_product_workers: int, max_page_workers: int,
+                              save_progress_every: int, start_page: int, max_pages: int) -> List[dict]:
+        import concurrent.futures
+        import threading
+        
+        all_products = []
+        seen_product_ids = set()
+        page_lock = threading.Lock()
+        
+        max_pages_to_process = max_pages if max_pages is not None else 50
+        
+        pages_to_scrape = list(range(start_page, start_page + max_pages_to_process))
+        
+        logger.info(f"Processing {len(pages_to_scrape)} pages in parallel with {max_page_workers} workers...")
+        
+        def process_single_page(page_num):
+            try:
+                page_scraper = PageScraper()
+                page_scraper.update_store_id(self.store_config['store_id'])
+                page_scraper.initialize_location(
+                    lat=self.store_config['lat'], 
+                    lng=self.store_config['lng']
+                )
+                
+                logger.info(f"--- Processing page {page_num} ---")
+                general_products = page_scraper.scrape_page(page_num)
+                
+                if not general_products:
+                    logger.info(f"No products found on page {page_num}")
+                    return []
+                
+                with page_lock:
+                    new_products = [p for p in general_products if p.external_id not in seen_product_ids]
+                    for product in new_products:
+                        seen_product_ids.add(product.external_id)
+                
+                if not new_products:
+                    logger.info(f"No new products on page {page_num}")
+                    return []
+                
+                logger.info(f"Page {page_num}: {len(new_products)} new products")
+                
+                unified_products = self._get_detailed_products(new_products, page_num, max_product_workers)
+                
+                logger.info(f"Page {page_num} completed: {len(unified_products)} unified products")
+                
+                if page_delay > 0:
+                    time.sleep(page_delay)
+                
+                return unified_products
+                
+            except Exception as e:
+                logger.error(f"Error processing page {page_num}: {e}")
+                return []
+        
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_page_workers) as executor:
+            future_to_page = {
+                executor.submit(process_single_page, page): page 
+                for page in pages_to_scrape
+            }
+            
+            for future in concurrent.futures.as_completed(future_to_page):
+                page_num = future_to_page[future]
+                try:
+                    page_products = future.result()
+                    all_products.extend(page_products)
+                    
+                    if len(all_products) % (save_progress_every * 10) == 0:
+                        logger.info(f"Progress: {len(all_products)} total products collected so far...")
+                        
+                except Exception as e:
+                    logger.error(f"Page {page_num} generated an exception: {e}")
+        
+        logger.info("--- PARALLEL SCRAPING COMPLETED ---")
+        logger.info(f"Total pages processed: {len(pages_to_scrape)}")
+        logger.info(f"Total unified products: {len(all_products)}")
+        
+        return all_products
