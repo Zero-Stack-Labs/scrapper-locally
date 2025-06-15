@@ -34,6 +34,21 @@ jobs:
         workload_identity_provider: projects/71269304760/locations/global/workloadIdentityPools/github-pool/providers/github-provider
         service_account: github-actions@jennipro-dev.iam.gserviceaccount.com
 
+    - name: Ensure Artifact Registry repository exists
+      run: |
+        # Check if repository exists, create if it doesn't
+        if ! gcloud artifacts repositories describe $REPOSITORY --location=$GAR_LOCATION --project=$PROJECT_ID >/dev/null 2>&1; then
+          echo "Repository $REPOSITORY does not exist. Creating..."
+          gcloud artifacts repositories create $REPOSITORY \
+            --repository-format=docker \
+            --location=$GAR_LOCATION \
+            --description="Auto-created repository for $SERVICE" \
+            --project=$PROJECT_ID
+          echo "Repository $REPOSITORY created successfully!"
+        else
+          echo "Repository $REPOSITORY already exists."
+        fi
+
     - name: Configure Docker to use gcloud as a credential helper
       run: |
         gcloud auth configure-docker $GAR_LOCATION-docker.pkg.dev
