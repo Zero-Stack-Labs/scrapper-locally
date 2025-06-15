@@ -10,7 +10,8 @@ logger = get_logger(__name__)
 app = FastAPI()
 
 health_thread_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="health-check")
-scraper_controller = ScraperController()
+scraper_thread_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="scraper-tasks")
+scraper_controller = ScraperController(scraper_thread_pool)
 
 def sync_health_check():
     return {"status": "healthy", "service": "scraper-locally"}
@@ -29,5 +30,11 @@ async def health_check():
 async def startup_event():
     logger.info("🚀 Iniciando aplicación de scraper")
     logger.info("✅ Aplicación iniciada correctamente")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    health_thread_pool.shutdown(wait=True)
+    scraper_thread_pool.shutdown(wait=False)
+    logger.info("✅ Thread pools shut down")
 
 app.include_router(scraper_controller.router)

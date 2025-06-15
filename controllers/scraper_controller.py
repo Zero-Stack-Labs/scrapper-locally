@@ -3,13 +3,16 @@ from pathlib import Path
 from managers.scraper_manager import ScraperManager
 from api_requests.scrape_request import ScrapeRequest
 from utils.logging_config import get_logger
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
 logger = get_logger(__name__)
 
 class ScraperController:
     
-    def __init__(self):
+    def __init__(self, scraper_thread_pool: ThreadPoolExecutor = None):
         self.router = APIRouter()
+        self.scraper_thread_pool = scraper_thread_pool
         self.router.add_api_route("/api/scrapper-locally/scrape", self.start_scrape, methods=["POST"])
     
     async def start_scrape(self, request: ScrapeRequest, background_tasks: BackgroundTasks):
@@ -34,7 +37,15 @@ class ScraperController:
         
         async def scraping_task_wrapper():
             try:
-                await manager.perform_scraping_task(task_id, locations, scraper_params, request.store_id, request.store_name)
+                if self.scraper_thread_pool:
+                    loop = asyncio.get_event_loop()
+                    await loop.run_in_executor(
+                        self.scraper_thread_pool,
+                        manager.perform_scraping_task,
+                        task_id, locations, scraper_params, request.store_id, request.store_name
+                    )
+                else:
+                    manager.perform_scraping_task(task_id, locations, scraper_params, request.store_id, request.store_name)
                 logger.info(f"Scraping completed for task {task_id}")
             except Exception as e:
                 logger.error(f"Error in background task {task_id}: {str(e)}", exc_info=True)

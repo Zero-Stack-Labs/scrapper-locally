@@ -43,7 +43,7 @@ class ScraperManager:
         with self._lock:
             return self.tasks.get(task_id, {"status": "not_found"})
 
-    async def perform_scraping_task(self, task_id: str, locations: List[Dict[str, Any]], scraper_params: Dict[str, Any], store_id: str = "", store_name: str = ""):
+    def perform_scraping_task(self, task_id: str, locations: List[Dict[str, Any]], scraper_params: Dict[str, Any], store_id: str = "", store_name: str = ""):
         self.update_task_status(task_id, "processing")
         
         total_stores = len(locations)
