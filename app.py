@@ -7,6 +7,10 @@ logger = get_logger(__name__)
 
 app = FastAPI()
 
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}
+
 @app.on_event("startup")
 async def startup_event():
     logger.info("🚀 Iniciando aplicación de scraper")
