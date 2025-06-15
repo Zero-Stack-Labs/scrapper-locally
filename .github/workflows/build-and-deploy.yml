@@ -9,7 +9,7 @@ on:
 env:
   PROJECT_ID: jennipro-dev
   GAR_LOCATION: us-central1
-  REPOSITORY: scraper-app
+  REPOSITORY: scrapper-locally
   SERVICE: scraper-locally
 
 jobs:
