@@ -10,7 +10,7 @@ class ScraperController:
     
     def __init__(self):
         self.router = APIRouter()
-        self.router.add_api_route("/scrape", self.start_scrape, methods=["POST"])
+        self.router.add_api_route("/api/scrapper-locally/scrape", self.start_scrape, methods=["POST"])
     
     async def start_scrape(self, request: ScrapeRequest, background_tasks: BackgroundTasks):
         logger.info(f"Starting scraping for {len(request.locations)} stores")
