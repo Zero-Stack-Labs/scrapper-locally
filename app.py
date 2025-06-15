@@ -11,6 +11,10 @@ app = FastAPI()
 async def health_check():
     return {"status": "healthy"}
 
+@app.get("/api/scrapper-locally/health")
+async def health_check():
+    return {"status": "healthy complete"}
+
 @app.on_event("startup")
 async def startup_event():
     logger.info("🚀 Iniciando aplicación de scraper")
