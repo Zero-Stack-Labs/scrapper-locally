@@ -178,6 +178,15 @@ class LocallyScraper:
 
         logger.info(summary)
 
+    def _save_progress_and_delay(self, all_products: List[dict], pages_completed: int, 
+                                total_pages: int, save_interval: int, page_delay: float):
+        logger.info(f"Progress: {pages_completed}/{total_pages} pages completed, {len(all_products)} total products...")
+        self.log_results(all_products)
+        
+        if page_delay > 0:
+            logger.info(f"Waiting {page_delay} seconds after completing {save_interval} pages...")
+            time.sleep(page_delay)
+
     def _scrape_pages_sequential(self, page_delay: float, max_product_workers: int, 
                                 save_progress_every: int, start_page: int, max_pages: int) -> List[dict]:
         all_products = []
@@ -215,12 +224,8 @@ class LocallyScraper:
             logger.info(f"Page {page} completed: {len(unified_products)} unified products obtained")
 
             if page % save_progress_every == 0:
-                logger.info(f"Saving progress up to page {page}...")
-                self.log_results(all_products)
-                
-                if page_delay > 0:
-                    logger.info(f"Waiting {page_delay} seconds after processing {save_progress_every} pages...")
-                    time.sleep(page_delay)
+                self._save_progress_and_delay(all_products, page - start_page + 1, 
+                                            max_pages or "∞", save_progress_every, page_delay)
             
             page += 1
         
@@ -298,11 +303,8 @@ class LocallyScraper:
                     pages_processed_count += 1
                     
                     if pages_processed_count % save_progress_every == 0:
-                        logger.info(f"Progress: {pages_processed_count}/{len(pages_to_scrape)} pages completed, {len(all_products)} total products...")
-                        
-                        if page_delay > 0:
-                            logger.info(f"Waiting {page_delay} seconds after processing {save_progress_every} pages...")
-                            time.sleep(page_delay)
+                        self._save_progress_and_delay(all_products, pages_processed_count, 
+                                                    len(pages_to_scrape), save_progress_every, page_delay)
                         
                 except Exception as e:
                     logger.error(f"Page {page_num} generated an exception: {e}")
