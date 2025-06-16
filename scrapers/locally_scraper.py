@@ -250,8 +250,6 @@ class LocallyScraper:
         
         logger.info(f"Processing {len(pages_to_scrape)} pages in parallel with {max_page_workers} workers...")
         
-        pages_processed_count = 0
-        
         def process_single_page(page_num):
             try:
                 page_scraper = PageScraper()
@@ -300,15 +298,9 @@ class LocallyScraper:
                 try:
                     page_products = future.result()
                     all_products.extend(page_products)
-                    pages_processed_count += 1
-                    
-                    if pages_processed_count % save_progress_every == 0:
-                        self._save_progress_and_delay(all_products, pages_processed_count, 
-                                                    len(pages_to_scrape), save_progress_every, page_delay)
                         
                 except Exception as e:
                     logger.error(f"Page {page_num} generated an exception: {e}")
-                    pages_processed_count += 1
         
         logger.info("--- PARALLEL SCRAPING COMPLETED ---")
         logger.info(f"Total pages processed: {len(pages_to_scrape)}")
