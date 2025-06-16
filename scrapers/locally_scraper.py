@@ -178,15 +178,6 @@ class LocallyScraper:
 
         logger.info(summary)
 
-    def _save_progress_and_delay(self, all_products: List[dict], pages_completed: int, 
-                                total_pages: int, save_interval: int, page_delay: float):
-        logger.info(f"Progress: {pages_completed}/{total_pages} pages completed, {len(all_products)} total products...")
-        self.log_results(all_products)
-        
-        if page_delay > 0:
-            logger.info(f"Waiting {page_delay} seconds after completing {save_interval} pages...")
-            time.sleep(page_delay)
-
     def _scrape_pages_sequential(self, page_delay: float, max_product_workers: int, 
                                 save_progress_every: int, start_page: int, max_pages: int) -> List[dict]:
         all_products = []
@@ -224,8 +215,12 @@ class LocallyScraper:
             logger.info(f"Page {page} completed: {len(unified_products)} unified products obtained")
 
             if page % save_progress_every == 0:
-                self._save_progress_and_delay(all_products, page - start_page + 1, 
-                                            max_pages or "∞", save_progress_every, page_delay)
+                logger.info(f"Saving progress up to page {page}...")
+                self.log_results(all_products)
+                
+                if page_delay > 0:
+                    logger.info(f"Waiting {page_delay} seconds after saving progress...")
+                    time.sleep(page_delay)
             
             page += 1
         
@@ -245,7 +240,6 @@ class LocallyScraper:
         page_lock = threading.Lock()
         
         max_pages_to_process = max_pages if max_pages is not None else 50
-        
         pages_to_scrape = list(range(start_page, start_page + max_pages_to_process))
         
         logger.info(f"Processing {len(pages_to_scrape)} pages in parallel with {max_page_workers} workers...")
@@ -287,23 +281,38 @@ class LocallyScraper:
                 logger.error(f"Error processing page {page_num}: {e}")
                 return []
         
-        with concurrent.futures.ThreadPoolExecutor(max_workers=max_page_workers) as executor:
-            future_to_page = {
-                executor.submit(process_single_page, page): page 
-                for page in pages_to_scrape
-            }
+        completed_pages = 0
+        
+        for batch_start in range(0, len(pages_to_scrape), save_progress_every):
+            batch_end = min(batch_start + save_progress_every, len(pages_to_scrape))
+            batch_pages = pages_to_scrape[batch_start:batch_end]
             
-            for future in concurrent.futures.as_completed(future_to_page):
-                page_num = future_to_page[future]
-                try:
-                    page_products = future.result()
-                    all_products.extend(page_products)
+            logger.info(f"Processing batch: pages {batch_pages[0]} to {batch_pages[-1]} ({len(batch_pages)} pages)")
+            
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max_page_workers) as executor:
+                future_to_page = {
+                    executor.submit(process_single_page, page): page 
+                    for page in batch_pages
+                }
+                
+                for future in concurrent.futures.as_completed(future_to_page):
+                    page_num = future_to_page[future]
+                    try:
+                        page_products = future.result()
+                        all_products.extend(page_products)
+                        completed_pages += 1
                         
-                except Exception as e:
-                    logger.error(f"Page {page_num} generated an exception: {e}")
+                    except Exception as e:
+                        logger.error(f"Page {page_num} generated an exception: {e}")
+            
+            logger.info(f"Batch completed: {completed_pages} total pages processed, {len(all_products)} total products")
+            
+            if batch_end < len(pages_to_scrape) and page_delay > 0:
+                logger.info(f"Waiting {page_delay} seconds before processing next batch...")
+                time.sleep(page_delay)
         
         logger.info("--- PARALLEL SCRAPING COMPLETED ---")
-        logger.info(f"Total pages processed: {len(pages_to_scrape)}")
+        logger.info(f"Total pages processed: {completed_pages}")
         logger.info(f"Total unified products: {len(all_products)}")
         
         return all_products
