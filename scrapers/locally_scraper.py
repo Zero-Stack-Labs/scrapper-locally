@@ -239,7 +239,7 @@ class LocallyScraper:
         seen_product_ids = set()
         page_lock = threading.Lock()
         
-        max_pages_to_process = max_pages if max_pages is not None else 50
+        max_pages_to_process = max_pages if max_pages is not None else 39
         pages_to_scrape = list(range(start_page, start_page + max_pages_to_process))
         
         logger.info(f"Processing {len(pages_to_scrape)} pages in parallel with {max_page_workers} workers...")
