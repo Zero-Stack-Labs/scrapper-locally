@@ -217,10 +217,10 @@ class LocallyScraper:
             if page % save_progress_every == 0:
                 logger.info(f"Saving progress up to page {page}...")
                 self.log_results(all_products)
-            
-            if page_delay > 0:
-                logger.info(f"Waiting {page_delay} seconds before processing page {page + 1}...")
-                time.sleep(page_delay)
+                
+                if page_delay > 0:
+                    logger.info(f"Waiting {page_delay} seconds after processing {save_progress_every} pages...")
+                    time.sleep(page_delay)
             
             page += 1
         
@@ -244,6 +244,8 @@ class LocallyScraper:
         pages_to_scrape = list(range(start_page, start_page + max_pages_to_process))
         
         logger.info(f"Processing {len(pages_to_scrape)} pages in parallel with {max_page_workers} workers...")
+        
+        pages_processed_count = 0
         
         def process_single_page(page_num):
             try:
@@ -276,9 +278,6 @@ class LocallyScraper:
                 
                 logger.info(f"Page {page_num} completed: {len(unified_products)} unified products")
                 
-                if page_delay > 0:
-                    time.sleep(page_delay)
-                
                 return unified_products
                 
             except Exception as e:
@@ -296,12 +295,18 @@ class LocallyScraper:
                 try:
                     page_products = future.result()
                     all_products.extend(page_products)
+                    pages_processed_count += 1
                     
-                    if len(all_products) % (save_progress_every * 10) == 0:
-                        logger.info(f"Progress: {len(all_products)} total products collected so far...")
+                    if pages_processed_count % save_progress_every == 0:
+                        logger.info(f"Progress: {pages_processed_count}/{len(pages_to_scrape)} pages completed, {len(all_products)} total products...")
+                        
+                        if page_delay > 0:
+                            logger.info(f"Waiting {page_delay} seconds after processing {save_progress_every} pages...")
+                            time.sleep(page_delay)
                         
                 except Exception as e:
                     logger.error(f"Page {page_num} generated an exception: {e}")
+                    pages_processed_count += 1
         
         logger.info("--- PARALLEL SCRAPING COMPLETED ---")
         logger.info(f"Total pages processed: {len(pages_to_scrape)}")
