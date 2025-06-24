@@ -33,6 +33,15 @@ class Product:
         self.available_zipcodes: List[str] = []
         self.in_stock_zipcodes: List[str] = []
         self.all_zipcodes: List[str] = []
+        self.category = ""
+        self.tags: List[Dict] = []
+        self.options: List[Dict] = []
+        self.coupon_code = ""
+        self.coupon_code_discount: float = 0.0
+        self.coupon_discount_type = ""
+        self.restricted_brand_id: Optional[str] = None
+        self.external_compare_at_price: Optional[float] = None
+        self.external_discount: Optional[float] = None
         self.created_at: Optional[datetime] = None
         self.updated_at: Optional[datetime] = None
     
@@ -134,6 +143,15 @@ class Product:
             "available_zipcodes": self.available_zipcodes,
             "in_stock_zipcodes": self.in_stock_zipcodes,
             "all_zipcodes": self.all_zipcodes,
+            "category": self.category,
+            "tags": self.tags,
+            "options": self.options,
+            "coupon_code": self.coupon_code,
+            "coupon_code_discount": self.coupon_code_discount,
+            "coupon_discount_type": self.coupon_discount_type,
+            "restricted_brand_id": self.restricted_brand_id,
+            "external_compare_at_price": self.external_compare_at_price,
+            "external_discount": self.external_discount,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None
         }
