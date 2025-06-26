@@ -2,6 +2,7 @@ from typing import Dict, List, Any
 import uuid
 import threading
 from datetime import datetime
+import requests
 from services.scraper_service import ScraperService
 from pathlib import Path
 import json
@@ -43,6 +44,24 @@ class ScraperManager:
         with self._lock:
             return self.tasks.get(task_id, {"status": "not_found"})
 
+    def sync_with_walmart_service(self, store_name: str):
+        try:
+            sync_url = "http://walmart-server-service.microservices:3000/sync"
+            payload = {"store_filter": store_name}
+            headers = {"Content-Type": "application/json"}
+            
+            response = requests.post(sync_url, json=payload, headers=headers, timeout=30)
+            response.raise_for_status()
+            
+            logger.info(f"Successfully synced with walmart service for store: {store_name}")
+            return True
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Failed to sync with walmart service for store {store_name}: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"Unexpected error during sync for store {store_name}: {e}")
+            return False
+
     def perform_scraping_task(self, task_id: str, locations: List[Dict[str, Any]], scraper_params: Dict[str, Any], store_id: str = "", store_name: str = ""):
         self.update_task_status(task_id, "processing")
         
@@ -78,6 +97,10 @@ class ScraperManager:
             end_time=datetime.now().isoformat(),
             progress=100,
         )
+        
+        if store_name:
+            logger.info(f"Initiating sync with walmart service for store: {store_name}")
+            self.sync_with_walmart_service(store_name)
     
     def generate_stock_analysis(self, all_products: List[Dict], locations: List[Dict]):
         try:
