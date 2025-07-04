@@ -41,6 +41,7 @@ class Product:
         self.coupon_discount_type = ""
         self.restricted_brand_id: Optional[str] = None
         self.external_compare_at_price: Optional[float] = None
+        self.shopify_category_id: Optional[str] = None
         self.external_discount: Optional[float] = None
         self.created_at: Optional[datetime] = None
         self.updated_at: Optional[datetime] = None
