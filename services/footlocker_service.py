@@ -1,96 +1,91 @@
 from typing import List, Dict, Any
-from scrapers.footlocker_scraper import FootlockerScraper
-from models.product import Product
+from scrapers.footlocker.footlocker_scraper import FootlockerScraper
 from repositories.product_repository import ProductRepository
 from utils.logging_config import get_logger
-import json
 from datetime import datetime
 
 logger = get_logger(__name__)
 
 
 class FootlockerService:
-
     def __init__(self):
-        self.scraper = FootlockerScraper()
+        self.scraper = None
         self.product_repository = ProductRepository()
-
-    def scrape_footlocker_products(self, 
-                                   query: str = "Nike",
-                                   page_size: int = 250,
-                                   sort: str = "relevance",
-                                   save_every: int = 10) -> Dict[str, Any]:
-        logger.info(f"Iniciando scraping de Footlocker para query '{query}'")
+        
+    def scrape_footlocker_products(
+        self,
+        query: str = "Nike",
+        max_pages: int = 2,
+        max_detail_workers: int = 3,
+        detail_delay: float = 1.0
+    ) -> Dict[str, Any]:
+        
+        self.scraper = FootlockerScraper()
         
         try:
-            all_products = []
-            current_page = 0
-            total_saved = 0
+            logger.info(f"Iniciando scraping de Footlocker para query: '{query}'")
             
-            while True:
-                logger.info(f"Scrapeando página {current_page}...")
-                
-                products = self.scraper.scrape_products(
-                    query=query,
-                    current_page=current_page,
-                    page_size=page_size,
-                    sort=sort
-                )
-                
-                if not products:
-                    logger.info(f"No se encontraron productos en la página {current_page}. Terminando scraping.")
-                    break
-                
-                for product in products:
-                    product.created_at = datetime.now()
-                    product.updated_at = datetime.now()
-                
-                all_products.extend(products)
-                current_page += 1
-                
-                if len(all_products) >= save_every:
-                    saved_count = self._save_products_batch(all_products[:save_every])
-                    total_saved += saved_count
-                    all_products = all_products[save_every:]
-                    logger.info(f"Guardado progreso: {total_saved} productos guardados hasta ahora")
+            products = self.scraper.scrape_products(
+                query=query,
+                max_pages=max_pages,
+                max_detail_workers=max_detail_workers,
+                detail_delay=detail_delay
+            )
             
-            if all_products:
-                saved_count = self._save_products_batch(all_products)
-                total_saved += saved_count
+            if not products:
+                logger.warning("No se encontraron productos")
+                return {
+                    "success": True,
+                    "products_scraped": 0,
+                    "query": query,
+                    "message": "No se encontraron productos para la búsqueda especificada"
+                }
             
-            logger.info(f"Scraping de Footlocker completado. Total: {total_saved} productos")
+            total_saved = self._save_products_to_db(products)
+            
+            logger.info(f"Scraping completado: {len(products)} productos obtenidos, {total_saved} guardados")
             
             return {
                 "success": True,
-                "products_scraped": total_saved,
-                "pages_scraped": current_page,
+                "products_scraped": len(products),
+                "products_saved": total_saved,
                 "query": query,
-                "message": f"Successfully scraped {total_saved} products from Footlocker"
+                "max_pages": max_pages,
+                "message": f"Successfully scraped {len(products)} products from Footlocker, {total_saved} saved to database"
             }
             
         except Exception as e:
-            logger.error(f"Error en scraping de Footlocker: {e}", exc_info=True)
+            logger.error(f"Error en FootlockerService: {e}")
             return {
                 "success": False,
                 "error": str(e),
                 "message": f"Failed to scrape Footlocker: {str(e)}"
             }
-
-    def _save_products_batch(self, products: List[Product]) -> int:
+        finally:
+            if self.scraper:
+                self.scraper.close()
+                self.scraper = None
+    
+    def _save_products_to_db(self, products: List) -> int:
         try:
-            saved_to_db = 0
+            saved_count = 0
             for product in products:
                 try:
+                    product.created_at = datetime.now()
+                    product.updated_at = datetime.now()
+                    
                     self.product_repository.upsert_product(product)
-                    saved_to_db += 1
+                    saved_count += 1
+                    logger.debug(f"✅ Producto guardado: {product.external_id}")
+                    
                 except Exception as db_error:
-                    logger.warning(f"Error guardando producto {product.external_id} en BD: {db_error}")
+                    logger.warning(f"❌ Error guardando producto {product.external_id}: {db_error}")
             
-            logger.info(f"Guardados {saved_to_db} productos en base de datos")
-            return len(products)
+            logger.info(f"Guardados {saved_count}/{len(products)} productos en base de datos")
+            return saved_count
             
         except Exception as e:
-            logger.error(f"Error guardando lote de productos: {e}")
+            logger.error(f"Error general guardando productos: {e}")
             return 0
 
  
