@@ -23,10 +23,13 @@ class FootlockerScraper(BaseScraper):
         query: str, 
         max_pages: int = 2,
         max_detail_workers: int = 3,
-        detail_delay: float = 1.0
+        detail_delay: float = 1.0,
+        api_delay: float = 2.0
     ) -> List[Product]:
         try:
-            basic_products = self.api_scraper.scrape_all_products(query, max_pages=max_pages)
+            basic_products = self.api_scraper.scrape_all_products(
+                query, max_pages=max_pages, delay=api_delay
+            )
             
             if not basic_products:
                 return []

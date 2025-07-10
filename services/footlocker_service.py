@@ -17,7 +17,8 @@ class FootlockerService:
         query: str = "Nike",
         max_pages: int = 2,
         max_detail_workers: int = 3,
-        detail_delay: float = 1.0
+        detail_delay: float = 1.0,
+        api_delay: float = 2.0
     ) -> Dict[str, Any]:
         
         self.scraper = FootlockerScraper()
@@ -29,7 +30,8 @@ class FootlockerService:
                 query=query,
                 max_pages=max_pages,
                 max_detail_workers=max_detail_workers,
-                detail_delay=detail_delay
+                detail_delay=detail_delay,
+                api_delay=api_delay
             )
             
             if not products:

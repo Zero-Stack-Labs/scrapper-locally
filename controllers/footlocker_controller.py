@@ -33,14 +33,16 @@ class FootlockerController:
                         request.query,
                         request.max_pages,
                         request.max_detail_workers,
-                        request.detail_delay
+                        request.detail_delay,
+                        request.api_delay
                     )
                 else:
                     result = service.scrape_footlocker_products(
                         query=request.query,
                         max_pages=request.max_pages,
                         max_detail_workers=request.max_detail_workers,
-                        detail_delay=request.detail_delay
+                        detail_delay=request.detail_delay,
+                        api_delay=request.api_delay
                     )
                 
                 logger.info(f"Footlocker scraping completed for task {task_id}: {result.get('message', 'Unknown result')}")

@@ -4,6 +4,8 @@ import time
 from typing import List, Dict, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from bs4 import BeautifulSoup
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from models.product import Product
 from .footlocker_mapper import FootlockerMapper
 from utils.logging_config import get_logger
@@ -15,6 +17,23 @@ class FootlockerProductScraper:
     def __init__(self):
         self.base_url = "https://www.footlocker.com"
         self.session = requests.Session()
+        
+        # Configurar HTTPAdapter con pool de conexiones más grande
+        retry_strategy = Retry(
+            total=3,
+            status_forcelist=[429, 500, 502, 503, 504],
+            backoff_factor=1
+        )
+        
+        adapter = HTTPAdapter(
+            pool_connections=50,  # Número de pools de conexiones diferentes
+            pool_maxsize=100,     # Máximo de conexiones por pool
+            max_retries=retry_strategy,
+            pool_block=False
+        )
+        
+        self.session.mount("http://", adapter)
+        self.session.mount("https://", adapter)
         
         self.headers = {
             'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -45,7 +64,7 @@ class FootlockerProductScraper:
         
         url = f"{self.base_url}/product/~/{product_id}.html"
         
-        logger.info(f"Obteniendo detalles del producto: {product_id}")
+        logger.debug(f"Obteniendo detalles del producto: {product_id}")
         response = self.make_request(url)
         
         if not response or response.status_code != 200:
@@ -85,7 +104,7 @@ class FootlockerProductScraper:
             if meta_description and meta_description.get('content'):
                 detailed_product['meta_description'] = meta_description.get('content')
             
-            logger.info(f"Detalles obtenidos para {product_id}: {len(detailed_product['variants'])} variantes")
+            logger.debug(f"Detalles obtenidos para {product_id}: {len(detailed_product['variants'])} variantes")
             return detailed_product
             
         except json.JSONDecodeError as e:

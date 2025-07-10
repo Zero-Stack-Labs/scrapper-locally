@@ -1,5 +1,6 @@
 import json
 import requests
+import time
 from typing import List, Dict, Optional
 from models.product import Product
 from .footlocker_mapper import FootlockerMapper
@@ -21,7 +22,7 @@ class FootlockerApiScraper:
         }
         
         self.cookies = {
-            'ak_bmsc_fl_com-ssn': '0F00nCq7r1xNy401kvLlQ3kyd0cTiJlhqDJJQUJ0BlRZquJW09QuiGMJqyZX1Wk9XI6Fmg5LRO2HqtwnkEeCsPsRMuMORWTAWc54ksS6qCJInOqtwJcbWNBEohO1bfA74mJLFont9YLibP2bhRPWwql2b3r4Krk7UtG99xMb'
+            'ak_bmsc_fl_com-ssn': '0FNSNtjhIRKIXwAU9TL3WNR0nFjZAGuroihHWdTMEKNLsEheegeeLkaWsirfXXtQQpDafLDCY3PhwSQMqKM3xOxKc0EtnEH5M69xURlYCkfQMiRckJSC734BepEUBjbvRI0uz2077zKtT2lNrlaohCcDb9R1RHMBFL8WCSwC'
         }
 
     def make_request(self, url: str) -> Optional[requests.Response]:
@@ -78,7 +79,7 @@ class FootlockerApiScraper:
             logger.error(f"Error inesperado al procesar productos de API Footlocker: {e}")
             return []
 
-    def scrape_all_products(self, query: str = "Nike", max_pages: int = None, page_size: int = 100) -> List[Product]:
+    def scrape_all_products(self, query: str = "Nike", max_pages: int = None, page_size: int = 100, delay: int = 5) -> List[Product]:
         all_products = []
         current_page = 0
         
@@ -97,6 +98,11 @@ class FootlockerApiScraper:
             logger.info(f"Total de productos scrapeados hasta ahora: {len(all_products)}")
             
             current_page += 1
+            
+            # Aplicar delay entre páginas si no es la última página y hay más páginas por procesar
+            if max_pages is None or current_page < max_pages:
+                logger.info(f"Esperando {delay} segundos antes de la siguiente página...")
+                time.sleep(delay)
         
         logger.info(f"Scraping de API completado. Total: {len(all_products)} productos")
         return all_products
