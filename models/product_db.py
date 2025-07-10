@@ -7,7 +7,7 @@ from database import Base
 
 class ProductDB(Base):
     __tablename__ = "products"
-    
+
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     record_type = Column(String(50), default="product")
     provider_id = Column(String(255), default="www.locally.com")
@@ -42,6 +42,8 @@ class ProductDB(Base):
     restricted_brand_id = Column(String(255), nullable=True)
     external_compare_at_price = Column(Float, nullable=True)
     shopify_category_id = Column(String(255), nullable=True)
+    seo_title = Column(String(500), nullable=True)
+    seo_description = Column(String(500), nullable=True)
     external_discount = Column(Float, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False) 
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
