@@ -10,7 +10,7 @@ logger = get_logger(__name__)
 
 class FootlockerApiScraper:
     
-    def __init__(self):
+    def __init__(self, cookies: Dict[str, str] = None):
         self.base_url = "https://www.footlocker.com"
         self.api_url = "https://www.footlocker.com/zgw/search-core/products/v3/search"
         self.session = requests.Session()
@@ -21,13 +21,23 @@ class FootlockerApiScraper:
             'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36'
         }
         
-        self.cookies = {
+        # Usar cookies proporcionadas o fallback a cookie por defecto
+        self.cookies = cookies if cookies else {
             'ak_bmsc_fl_com-ssn': '0FNSNtjhIRKIXwAU9TL3WNR0nFjZAGuroihHWdTMEKNLsEheegeeLkaWsirfXXtQQpDafLDCY3PhwSQMqKM3xOxKc0EtnEH5M69xURlYCkfQMiRckJSC734BepEUBjbvRI0uz2077zKtT2lNrlaohCcDb9R1RHMBFL8WCSwC'
         }
+        
+        logger.debug(f"FootlockerApiScraper inicializado con cookies: {list(self.cookies.keys())}")
+    
+    def update_cookies(self, new_cookies: Dict[str, str]):
+        """Actualizar cookies después de la inicialización"""
+        if new_cookies:
+            self.cookies.update(new_cookies)
+            logger.debug(f"Cookies actualizadas: {list(self.cookies.keys())}")
 
     def make_request(self, url: str) -> Optional[requests.Response]:
         try:
             logger.info(f"Haciendo petición a API Footlocker: {url}")
+            logger.info(f"Cookies enviadas: {list(self.cookies.keys())} - ak_bmsc_fl_com-ssn: {self.cookies.get('ak_bmsc_fl_com-ssn', 'NO ENCONTRADA')}")
             response = self.session.get(url, headers=self.headers, cookies=self.cookies, timeout=30)
             logger.info(f"Respuesta recibida de API: {response.status_code}")
             
@@ -43,7 +53,7 @@ class FootlockerApiScraper:
                            page_size: int = 100, sort: str = "relevance") -> List[Product]:
         
         query_encoded = f"%3A%3Acollection_id%3A{query.lower()}"
-        url = f"{self.api_url}?query={query_encoded}&q={query}&currentPage={current_page}&sort={sort}&pageSize={page_size}&timestamp=3"
+        url = f"{self.api_url}?query={query_encoded}&q={query}&currentPage={current_page}&sort={sort}&pageSize={page_size}&pageType=browse&timestamp=1"
         
         logger.info(f"Scrapeando página {current_page} de API Footlocker para query '{query}'")
         

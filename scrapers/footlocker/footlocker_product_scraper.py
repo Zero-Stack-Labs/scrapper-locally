@@ -14,7 +14,7 @@ logger = get_logger(__name__)
 
 class FootlockerProductScraper:
     
-    def __init__(self):
+    def __init__(self, cookies: Dict[str, str] = None):
         self.base_url = "https://www.footlocker.com"
         self.session = requests.Session()
         
@@ -41,9 +41,18 @@ class FootlockerProductScraper:
             'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36'
         }
         
-        self.cookies = {
+        # Usar cookies proporcionadas o fallback a cookie por defecto
+        self.cookies = cookies if cookies else {
             'ak_bmsc_fl_com-ssn': '0aVTi4UZ8jTgP8gePEGfjBxlNpVJpXON8Qz85HgmLhEt64zFF2pG8nTTmpDZkpw0oo2Btki2OZdkuRcK76HiPFMBw5Wvry1DLwRVpQsXzCJtAE4HYKoTqg69ioNAgHSp7hWFC82twuE6wczT31V6vLWlmzwYkXh6SycqvqqJQoy'
         }
+        
+        logger.debug(f"FootlockerProductScraper inicializado con cookies: {list(self.cookies.keys())}")
+    
+    def update_cookies(self, new_cookies: Dict[str, str]):
+        """Actualizar cookies después de la inicialización"""
+        if new_cookies:
+            self.cookies.update(new_cookies)
+            logger.debug(f"Cookies actualizadas: {list(self.cookies.keys())}")
 
     def make_request(self, url: str) -> Optional[requests.Response]:
         try:

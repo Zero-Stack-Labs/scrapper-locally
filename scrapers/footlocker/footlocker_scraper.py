@@ -8,6 +8,7 @@ from models.product import Product
 from .footlocker_api_scraper import FootlockerApiScraper
 from .footlocker_product_scraper import FootlockerProductScraper
 from .footlocker_mapper import FootlockerMapper
+from .footlocker_cookie_manager import FootlockerCookieManager
 from utils.logging_config import get_logger
 
 
@@ -15,8 +16,9 @@ class FootlockerScraper(BaseScraper):
     def __init__(self):
         super().__init__()
         self.logger = get_logger(__name__)
-        self.api_scraper = FootlockerApiScraper()
-        self.product_scraper = FootlockerProductScraper()
+        self.cookie_manager = FootlockerCookieManager()
+        self.api_scraper = None
+        self.product_scraper = None
         
     def scrape_products(
         self, 
@@ -24,9 +26,23 @@ class FootlockerScraper(BaseScraper):
         max_pages: int = 2,
         max_detail_workers: int = 3,
         detail_delay: float = 1.0,
-        api_delay: float = 2.0
+        api_delay: float = 2.0,
+        debug_cookies: bool = False
     ) -> List[Product]:
         try:
+            # Obtener cookies frescas al inicio del scraping
+            self.logger.info("Obteniendo cookies frescas de Footlocker...")
+            fresh_cookies = self.cookie_manager.get_fresh_cookies(debug_mode=debug_cookies)
+            
+            if fresh_cookies:
+                self.logger.info("✅ Cookies obtenidas exitosamente")
+            else:
+                self.logger.warning("⚠️ No se pudieron obtener cookies frescas, usando cookies por defecto")
+            
+            # Inicializar scrapers con las cookies obtenidas
+            self.api_scraper = FootlockerApiScraper(cookies=fresh_cookies)
+            self.product_scraper = FootlockerProductScraper(cookies=fresh_cookies)
+            
             basic_products = self.api_scraper.scrape_all_products(
                 query, max_pages=max_pages, delay=api_delay
             )
@@ -99,7 +115,8 @@ class FootlockerScraper(BaseScraper):
         return merged_products
     
     def close(self):
-        if self.api_scraper:
+        """Cerrar scrapers si fueron inicializados"""
+        if hasattr(self, 'api_scraper') and self.api_scraper:
             self.api_scraper.close()
-        if self.product_scraper:
+        if hasattr(self, 'product_scraper') and self.product_scraper:
             self.product_scraper.close() 
