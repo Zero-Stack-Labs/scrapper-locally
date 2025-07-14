@@ -18,17 +18,14 @@ class FootlockerApiScraper:
         self.headers = {
             'accept': 'application/json',
             'accept-language': 'en-US,en;q=0.9',
-            'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36'
-        }
-        
-        self.cookies = {
-            'ak_bmsc_fl_com-ssn': '0FNSNtjhIRKIXwAU9TL3WNR0nFjZAGuroihHWdTMEKNLsEheegeeLkaWsirfXXtQQpDafLDCY3PhwSQMqKM3xOxKc0EtnEH5M69xURlYCkfQMiRckJSC734BepEUBjbvRI0uz2077zKtT2lNrlaohCcDb9R1RHMBFL8WCSwC'
+            'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
+            'x-kpsdk-ct': '0FIHlutI2zbN6SvcJtiGSCCMcdxoBN0juj8S9fAwRtCgti12498OJht6h4PTD1dkJUT4G8vJuAXZ6gcRZ3xaHCVOdKNAvWDgwenJi2KHtp22pd2IGJhCXIOqRe9X6liospDknUoa83ZSa6AevjpEKUHe13Ii5ejpVLCg8Jff'
         }
 
     def make_request(self, url: str) -> Optional[requests.Response]:
         try:
             logger.info(f"Haciendo petición a API Footlocker: {url}")
-            response = self.session.get(url, headers=self.headers, cookies=self.cookies, timeout=30)
+            response = self.session.get(url, headers=self.headers, timeout=30)
             logger.info(f"Respuesta recibida de API: {response.status_code}")
             
             if response.status_code != 200:
