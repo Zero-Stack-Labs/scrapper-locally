@@ -16,8 +16,8 @@ logger = get_logger(__name__)
 
 class FootlockerProductScraper:
     
-    def __init__(self):
-        self.base_url = "https://www.footlocker.com"
+    def __init__(self, base_url: str = "https://www.footlocker.com", x_kpsdk_ct: str = None):
+        self.base_url = base_url
         self.session = requests.Session()
         
         # Configurar HTTPAdapter con pool de conexiones más grande
@@ -37,11 +37,13 @@ class FootlockerProductScraper:
         self.session.mount("http://", adapter)
         self.session.mount("https://", adapter)
         
+        default_x_kpsdk_ct = '0FIHlutI2zbN6SvcJtiGSCCMcdxoBN0juj8S9fAwRtCgti12498OJht6h4PTD1dkJUT4G8vJuAXZ6gcRZ3xaHCVOdKNAvWDgwenJi2KHtp22pd2IGJhCXIOqRe9X6liospDknUoa83ZSa6AevjpEKUHe13Ii5ejpVLCg8Jff'
+
         self.headers = {
             'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
             'accept-language': 'en-US,en;q=0.9',
             'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
-            'x-kpsdk-ct': '0FIHlutI2zbN6SvcJtiGSCCMcdxoBN0juj8S9fAwRtCgti12498OJht6h4PTD1dkJUT4G8vJuAXZ6gcRZ3xaHCVOdKNAvWDgwenJi2KHtp22pd2IGJhCXIOqRe9X6liospDknUoa83ZSa6AevjpEKUHe13Ii5ejpVLCg8Jff'
+            'x-kpsdk-ct': x_kpsdk_ct or default_x_kpsdk_ct
         }
 
     def make_request(self, url: str) -> Optional[requests.Response]:

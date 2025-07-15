@@ -12,19 +12,36 @@ class FootlockerService:
         self.scraper = None
         self.product_repository = ProductRepository()
         
+    def _get_scraper_config(self, site_type: str = 'main') -> Dict[str, str]:
+        if site_type == 'kids':
+            return {
+                "base_url": "https://www.kidsfootlocker.com",
+                "x_kpsdk_ct": "0GBBS1IvqAJuxzUMdr9gf3sCAH9UKjEHbKc5QBkowdPB27cPfaB3FT7kqpqillfUqTuKDHAOZqzTxWKvfw9K7ihkrhNX5jXHFTv3BRoO7jxnHlTxWDOprS0oljV6VvrQ9pyQf8CItyIaOJpXC6ICeJJLFvNqCjx8XxdbMlFr"
+            }
+        # Default to main site
+        return {
+            "base_url": "https://www.footlocker.com",
+            "x_kpsdk_ct": None  # Will use the default in the scraper
+        }
+
     def scrape_footlocker_products(
         self,
         query: str = "Nike",
         max_pages: int = 2,
         max_detail_workers: int = 3,
         detail_delay: float = 1.0,
-        api_delay: float = 2.0
+        api_delay: float = 2.0,
+        site_type: str = 'main'
     ) -> Dict[str, Any]:
         
-        self.scraper = FootlockerScraper()
+        config = self._get_scraper_config(site_type)
+        self.scraper = FootlockerScraper(
+            base_url=config['base_url'],
+            x_kpsdk_ct=config['x_kpsdk_ct']
+        )
         
         try:
-            logger.info(f"Iniciando scraping de Footlocker para query: '{query}'")
+            logger.info(f"Iniciando scraping de '{config['base_url']}' para query: '{query}'")
             
             products = self.scraper.scrape_products(
                 query=query,

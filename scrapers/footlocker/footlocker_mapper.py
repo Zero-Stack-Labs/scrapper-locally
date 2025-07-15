@@ -1,5 +1,6 @@
 from typing import Dict, List, Optional
 import re
+from urllib.parse import urlparse
 from models.product import Product
 from models.variant import Variant
 from utils.logging_config import get_logger
@@ -9,7 +10,7 @@ logger = get_logger(__name__)
 class FootlockerMapper:
     
     @staticmethod
-    def map_api_product_to_product(product_data: Dict) -> Optional[Product]:
+    def map_api_product_to_product(product_data: Dict, base_url: str) -> Optional[Product]:
         try:
             external_id = product_data.get('sku', '')
             name = product_data.get('name', '')
@@ -20,9 +21,13 @@ class FootlockerMapper:
             
             product = Product(external_id=external_id, name=name)
             
-            product.store_name = "footlocker"
-            product.provider_id = "www.footlocker.com"
-            product.url = f"https://www.footlocker.com/product/~/{external_id}.html"
+            parsed_url = urlparse(base_url)
+            domain = parsed_url.netloc
+            store_name = domain.replace('www.', '').replace('.com', '')
+            
+            product.store_name = store_name
+            product.provider_id = domain
+            product.url = f"{base_url}/product/~/{external_id}.html"
             product.sku = product_data.get('baseProduct', external_id)
             product.brand = FootlockerMapper._extract_brand_from_name(name)
             
