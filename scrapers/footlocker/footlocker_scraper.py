@@ -12,10 +12,20 @@ from utils.logging_config import get_logger
 
 
 class FootlockerScraper(BaseScraper):
-    def __init__(self, base_url: str = "https://www.footlocker.com", x_kpsdk_ct: str = ''):
+    def __init__(self, base_url: str = "https://www.footlocker.com", x_kpsdk_ct: str = '', store_id: str = '', latitude: float = 0.0, longitude: float = 0.0, zipcode: str = ''):
         super().__init__()
         self.logger = get_logger(__name__)
-        self.api_scraper = FootlockerApiScraper(base_url=base_url, x_kpsdk_ct=x_kpsdk_ct)
+        
+        self.store_id = store_id
+        self.latitude = latitude
+        self.longitude = longitude
+        self.zipcode = zipcode
+        
+        self.api_scraper = FootlockerApiScraper(
+            base_url=base_url, 
+            x_kpsdk_ct=x_kpsdk_ct,
+            store_id=self.store_id
+        )
         self.product_scraper = FootlockerProductScraper(base_url=base_url, x_kpsdk_ct=x_kpsdk_ct)
         
     def scrape_products(
@@ -28,7 +38,8 @@ class FootlockerScraper(BaseScraper):
     ) -> List[Product]:
         try:
             basic_products = self.api_scraper.scrape_all_products(
-                query, max_pages=max_pages, delay=api_delay
+                query, max_pages=max_pages, delay=api_delay,
+                latitude=self.latitude, longitude=self.longitude, zipcode=self.zipcode
             )
             
             if not basic_products:

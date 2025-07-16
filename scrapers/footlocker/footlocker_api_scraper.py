@@ -10,8 +10,9 @@ logger = get_logger(__name__)
 
 class FootlockerApiScraper:
     
-    def __init__(self, base_url: str = "https://www.footlocker.com", x_kpsdk_ct: str = ''):
+    def __init__(self, base_url: str = "https://www.footlocker.com", x_kpsdk_ct: str = '', store_id: str = ''):
         self.base_url = base_url
+        self.store_id = store_id
         self.api_url = f"{base_url}/zgw/search-core/products/v3/search"
         self.session = requests.Session()
         
@@ -37,10 +38,13 @@ class FootlockerApiScraper:
             return None
 
     def scrape_products_page(self, query: str = "Nike", current_page: int = 0, 
-                           page_size: int = 100, sort: str = "relevance") -> List[Product]:
+                           page_size: int = 100, sort: str = "relevance",
+                           latitude: float = 0.0, longitude: float = 0.0, zipcode: str = '') -> List[Product]:
         
         query_encoded = f"%3A%3Acollection_id%3A{query.lower()}"
         url = f"{self.api_url}?query={query_encoded}&q={query}&currentPage={current_page}&sort={sort}&pageSize={page_size}&timestamp=3"
+        if self.store_id:
+            url += f"&storeID={self.store_id}"
         
         logger.info(f"Scrapeando página {current_page} de API Footlocker para query '{query}'")
         
@@ -62,7 +66,11 @@ class FootlockerApiScraper:
             
             products = []
             for product_data in products_data:
-                product = FootlockerMapper.map_api_product_to_product(product_data, self.base_url)
+                product = FootlockerMapper.map_api_product_to_product(
+                    product_data, self.base_url,
+                    store_id=self.store_id, latitude=latitude,
+                    longitude=longitude, zipcode=zipcode
+                )
                 if product:
                     product.page_number = current_page
                     products.append(product)
@@ -76,7 +84,8 @@ class FootlockerApiScraper:
             logger.error(f"Error inesperado al procesar productos de API Footlocker: {e}")
             return []
 
-    def scrape_all_products(self, query: str = "Nike", max_pages: int = None, page_size: int = 100, delay: int = 5) -> List[Product]:
+    def scrape_all_products(self, query: str = "Nike", max_pages: int = None, page_size: int = 100, delay: int = 5,
+                            latitude: float = 0.0, longitude: float = 0.0, zipcode: str = '') -> List[Product]:
         all_products = []
         current_page = 0
         
@@ -85,7 +94,10 @@ class FootlockerApiScraper:
                 logger.info(f"Alcanzado límite máximo de páginas ({max_pages}). Terminando scraping.")
                 break
                 
-            products = self.scrape_products_page(query, current_page, page_size)
+            products = self.scrape_products_page(
+                query, current_page, page_size,
+                latitude=latitude, longitude=longitude, zipcode=zipcode
+            )
             
             if not products:
                 logger.info(f"No se encontraron productos en la página {current_page}. Terminando scraping.")

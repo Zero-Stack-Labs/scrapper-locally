@@ -1,3 +1,4 @@
+import json
 from typing import List, Dict, Any, Optional
 from scrapers.footlocker.footlocker_scraper import FootlockerScraper
 from repositories.product_repository import ProductRepository
@@ -47,10 +48,21 @@ class FootlockerService:
         
         x_kpsdk_ct = self._get_dynamic_header(base_url)
 
-        return {
+        with open('config/locations.json', 'r') as f:
+            locations_config = json.load(f)
+        
+        location_data = locations_config.get(site_type)
+
+        if not location_data:
+            raise ValueError(f"No se encontró configuración de ubicación para site_type: {site_type}")
+
+        config = {
             "base_url": base_url,
             "x_kpsdk_ct": x_kpsdk_ct
         }
+        config.update(location_data)
+        
+        return config
 
     def scrape_footlocker_products(
         self,
@@ -65,7 +77,11 @@ class FootlockerService:
         config = self._get_scraper_config(site_type)
         self.scraper = FootlockerScraper(
             base_url=config['base_url'],
-            x_kpsdk_ct=config['x_kpsdk_ct']
+            x_kpsdk_ct=config['x_kpsdk_ct'],
+            store_id=config['store_id'],
+            latitude=config['latitude'],
+            longitude=config['longitude'],
+            zipcode=config['zipcode']
         )
         
         try:

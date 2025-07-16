@@ -1,0 +1,14 @@
+{
+  "main": {
+    "latitude": 32.722563,
+    "longitude": -96.834570,
+    "store_id": "0308563",
+    "zipcode": "75224"
+  },
+  "kids": {
+    "latitude": 32.722132,
+    "longitude": -96.832624,
+    "store_id": "1648520",
+    "zipcode": "75224"
+  }
+} 

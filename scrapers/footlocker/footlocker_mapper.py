@@ -10,7 +10,9 @@ logger = get_logger(__name__)
 class FootlockerMapper:
     
     @staticmethod
-    def map_api_product_to_product(product_data: Dict, base_url: str) -> Optional[Product]:
+    def map_api_product_to_product(product_data: Dict, base_url: str,
+                                   store_id: str = '', latitude: float = 0.0,
+                                   longitude: float = 0.0, zipcode: str = '') -> Optional[Product]:
         try:
             external_id = product_data.get('sku', '')
             name = product_data.get('name', '')
@@ -20,6 +22,15 @@ class FootlockerMapper:
                 return None
             
             product = Product(external_id=external_id, name=name)
+            
+            product.store_id = store_id
+            product.lat = latitude
+            product.lng = longitude
+            
+            zip_array = [zipcode] if zipcode else []
+            product.available_zipcodes = zip_array
+            product.in_stock_zipcodes = zip_array
+            product.all_zipcodes = zip_array
             
             parsed_url = urlparse(base_url)
             domain = parsed_url.netloc
