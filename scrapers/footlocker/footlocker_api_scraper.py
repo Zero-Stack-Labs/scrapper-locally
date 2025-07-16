@@ -10,18 +10,16 @@ logger = get_logger(__name__)
 
 class FootlockerApiScraper:
     
-    def __init__(self, base_url: str = "https://www.footlocker.com", x_kpsdk_ct: str = None):
+    def __init__(self, base_url: str = "https://www.footlocker.com", x_kpsdk_ct: str = ''):
         self.base_url = base_url
         self.api_url = f"{base_url}/zgw/search-core/products/v3/search"
         self.session = requests.Session()
         
-        default_x_kpsdk_ct = '0FIHlutI2zbN6SvcJtiGSCCMcdxoBN0juj8S9fAwRtCgti12498OJht6h4PTD1dkJUT4G8vJuAXZ6gcRZ3xaHCVOdKNAvWDgwenJi2KHtp22pd2IGJhCXIOqRe9X6liospDknUoa83ZSa6AevjpEKUHe13Ii5ejpVLCg8Jff'
-
         self.headers = {
             'accept': 'application/json',
             'accept-language': 'en-US,en;q=0.9',
-            'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
-            'x-kpsdk-ct': x_kpsdk_ct or default_x_kpsdk_ct
+            'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
+            'x-kpsdk-ct': x_kpsdk_ct
         }
 
     def make_request(self, url: str) -> Optional[requests.Response]:

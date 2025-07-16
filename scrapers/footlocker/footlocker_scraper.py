@@ -12,7 +12,7 @@ from utils.logging_config import get_logger
 
 
 class FootlockerScraper(BaseScraper):
-    def __init__(self, base_url: str = "https://www.footlocker.com", x_kpsdk_ct: str = None):
+    def __init__(self, base_url: str = "https://www.footlocker.com", x_kpsdk_ct: str = ''):
         super().__init__()
         self.logger = get_logger(__name__)
         self.api_scraper = FootlockerApiScraper(base_url=base_url, x_kpsdk_ct=x_kpsdk_ct)

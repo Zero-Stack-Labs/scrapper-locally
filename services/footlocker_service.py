@@ -1,8 +1,10 @@
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from scrapers.footlocker.footlocker_scraper import FootlockerScraper
 from repositories.product_repository import ProductRepository
 from utils.logging_config import get_logger
 from datetime import datetime
+from utils.token_extractor import AntiDetectionExtractor
+
 
 logger = get_logger(__name__)
 
@@ -11,17 +13,43 @@ class FootlockerService:
     def __init__(self):
         self.scraper = None
         self.product_repository = ProductRepository()
+    
+    def _get_dynamic_header(self, base_url: str) -> Optional[str]:
+        token = None
+        extractor = None
+        try:
+            logger.info(f"Iniciando extracción de token para {base_url}...")
+            target_url = f"{base_url}/category/brands/nike.html"
+            
+            # Usamos headless=False porque es la configuración que ha demostrado ser robusta.
+            extractor = AntiDetectionExtractor(use_undetected=True, headless=False)
+            token = extractor.obtener_token_kpsdk(target_url=target_url)
+
+            if token:
+                logger.info(f"✅ Token de seguridad obtenido con éxito para {base_url}")
+            else:
+                logger.warning(f"⚠️ No se pudo obtener el token de seguridad para {base_url}")
+
+        except Exception as e:
+            logger.error(f"Error al ejecutar AntiDetectionExtractor: {e}")
+        finally:
+            if extractor:
+                extractor.close()
         
-    def _get_scraper_config(self, site_type: str = 'main') -> Dict[str, str]:
-        if site_type == 'kids':
-            return {
-                "base_url": "https://www.kidsfootlocker.com",
-                "x_kpsdk_ct": "0GBBS1IvqAJuxzUMdr9gf3sCAH9UKjEHbKc5QBkowdPB27cPfaB3FT7kqpqillfUqTuKDHAOZqzTxWKvfw9K7ihkrhNX5jXHFTv3BRoO7jxnHlTxWDOprS0oljV6VvrQ9pyQf8CItyIaOJpXC6ICeJJLFvNqCjx8XxdbMlFr"
-            }
-        # Default to main site
+        return token
+
+    def _get_scraper_config(self, site_type: str = 'main') -> Dict[str, Any]:
+        base_url_map = {
+            'kids': "https://www.kidsfootlocker.com",
+            'main': "https://www.footlocker.com"
+        }
+        base_url = base_url_map.get(site_type, base_url_map['main'])
+        
+        x_kpsdk_ct = self._get_dynamic_header(base_url)
+
         return {
-            "base_url": "https://www.footlocker.com",
-            "x_kpsdk_ct": None  # Will use the default in the scraper
+            "base_url": base_url,
+            "x_kpsdk_ct": x_kpsdk_ct
         }
 
     def scrape_footlocker_products(
