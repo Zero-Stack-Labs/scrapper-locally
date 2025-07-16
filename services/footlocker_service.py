@@ -23,7 +23,7 @@ class FootlockerService:
             
             # Usamos headless=False porque es la configuración que ha demostrado ser robusta.
             extractor = AntiDetectionExtractor(use_undetected=True, headless=False)
-            token = extractor.obtener_token_kpsdk(target_url=target_url)
+            token = extractor.get_token(target_url=target_url)
 
             if token:
                 logger.info(f"✅ Token de seguridad obtenido con éxito para {base_url}")
