@@ -15,12 +15,15 @@ class FootlockerService:
         self.scraper = None
         self.product_repository = ProductRepository()
     
-    def _get_dynamic_header(self, base_url: str) -> Optional[str]:
+    def _get_dynamic_header(self, base_url: str, store_id: str) -> Optional[str]:
         token = None
         extractor = None
         try:
-            logger.info(f"Iniciando extracción de token para {base_url}...")
-            target_url = f"{base_url}/category/brands/nike.html"
+            logger.info(f"Iniciando extracción de token para {base_url} y tienda {store_id}...")
+            
+            target_url = f"{base_url}/category/brands/nike.htm"
+            if store_id:
+                target_url += f"?storeID={store_id}"
             
             # Usamos headless=False porque es la configuración que ha demostrado ser robusta.
             extractor = AntiDetectionExtractor(use_undetected=True, headless=False)
@@ -45,8 +48,6 @@ class FootlockerService:
             'main': "https://www.footlocker.com"
         }
         base_url = base_url_map.get(site_type, base_url_map['main'])
-        
-        x_kpsdk_ct = self._get_dynamic_header(base_url)
 
         with open('config/locations.json', 'r') as f:
             locations_config = json.load(f)
@@ -55,6 +56,9 @@ class FootlockerService:
 
         if not location_data:
             raise ValueError(f"No se encontró configuración de ubicación para site_type: {site_type}")
+        
+        store_id = location_data.get("store_id", "")
+        x_kpsdk_ct = self._get_dynamic_header(base_url, store_id)
 
         config = {
             "base_url": base_url,

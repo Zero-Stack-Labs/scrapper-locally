@@ -29,6 +29,7 @@ class AntiDetectionExtractor:
         if self.use_undetected:
             print("🔧 Usando undetected-chromedriver...")
             options = uc.ChromeOptions()
+            options.add_argument('--incognito')
             options.set_capability('goog:loggingPrefs', {'performance': 'ALL'})
             
             driver = uc.Chrome(options=options, headless=headless)
@@ -37,6 +38,7 @@ class AntiDetectionExtractor:
         else:
             print("🔧 Usando ChromeDriver normal con evasión avanzada...")
             options = Options()
+            options.add_argument('--incognito')
             if headless:
                 print("   - en modo headless.")
                 options.add_argument('--headless=new')
