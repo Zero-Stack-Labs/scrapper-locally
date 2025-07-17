@@ -2,6 +2,7 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from typing import List, Dict, Any
 import time
+import os
 
 from scrapers.base_scraper import BaseScraper
 from models.product import Product
@@ -9,6 +10,7 @@ from .footlocker_api_scraper import FootlockerApiScraper
 from .footlocker_product_scraper import FootlockerProductScraper
 from .footlocker_mapper import FootlockerMapper
 from utils.logging_config import get_logger
+from utils.html_utils import strip_html_from_text
 
 
 class FootlockerScraper(BaseScraper):
@@ -67,14 +69,23 @@ class FootlockerScraper(BaseScraper):
             detailed_data = detailed_dict.get(basic_product.external_id)
             
             if detailed_data:
+                disable_html = os.getenv('DISABLE_HTML_DESCRIPTION', 'false').lower() == 'true'
+                
                 if detailed_data.get('description') and not basic_product.description:
-                    basic_product.description = detailed_data['description']
+                    description = detailed_data['description']
+                    if disable_html:
+                        description = strip_html_from_text(description)
+                    basic_product.description = description
                 
                 if detailed_data.get('meta_description'):
+                    meta_description = detailed_data['meta_description']
+                    if disable_html:
+                        meta_description = strip_html_from_text(meta_description)
+                    
                     if basic_product.description:
-                        basic_product.description += f" | {detailed_data['meta_description']}"
+                        basic_product.description += f" | {meta_description}"
                     else:
-                        basic_product.description = detailed_data['meta_description']
+                        basic_product.description = meta_description
                 
                 if detailed_data.get('brand') and not basic_product.brand:
                     basic_product.brand = detailed_data['brand']
