@@ -25,8 +25,10 @@ class FootlockerService:
             if store_id:
                 target_url += f"?storeID={store_id}"
             
-            # Usamos headless=False porque es la configuración que ha demostrado ser robusta.
-            extractor = AntiDetectionExtractor(use_undetected=True, headless=False)
+            # Use headless mode in containerized environments for resource efficiency
+            import os
+            is_containerized = os.environ.get('CHROME_BIN') is not None
+            extractor = AntiDetectionExtractor(use_undetected=True, headless=is_containerized)
             token = extractor.get_token(target_url=target_url)
 
             if token:
