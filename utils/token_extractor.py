@@ -30,29 +30,67 @@ class AntiDetectionExtractor:
             print("🔧 Usando undetected-chromedriver...")
             options = uc.ChromeOptions()
             options.add_argument('--incognito')
+            options.add_argument('--no-sandbox')
+            options.add_argument('--disable-dev-shm-usage')
+            options.add_argument('--disable-gpu')
+            options.add_argument('--disable-web-security')
+            options.add_argument('--disable-features=VizDisplayCompositor')
+            options.add_argument('--window-size=1920,1080')
             options.set_capability('goog:loggingPrefs', {'performance': 'ALL'})
             
-            driver = uc.Chrome(options=options, headless=headless)
-            if headless:
-                print("   - en modo headless.")
+            # Set Chrome binary path for containerized environments
+            import os
+            chrome_binary = os.environ.get('CHROME_BIN') or os.environ.get('CHROME_PATH')
+            if chrome_binary:
+                options.binary_location = chrome_binary
+                print(f"   - usando Chrome binary: {chrome_binary}")
+            
+            try:
+                driver = uc.Chrome(options=options, headless=headless)
+                if headless:
+                    print("   - en modo headless.")
+            except Exception as e:
+                print(f"❌ Error con undetected-chromedriver: {e}")
+                print("🔄 Fallback a ChromeDriver normal...")
+                self.use_undetected = False
+                return self.setup_driver(headless)
         else:
             print("🔧 Usando ChromeDriver normal con evasión avanzada...")
             options = Options()
             options.add_argument('--incognito')
+            options.add_argument("--no-sandbox")
+            options.add_argument("--disable-dev-shm-usage")
+            options.add_argument("--disable-gpu")
+            options.add_argument("--disable-web-security")
+            options.add_argument("--disable-features=VizDisplayCompositor")
+            options.add_argument("--window-size=1920,1080")
+            
             if headless:
                 print("   - en modo headless.")
                 options.add_argument('--headless=new')
-                options.add_argument('--disable-gpu')
+            
             options.add_argument("--disable-blink-features=AutomationControlled")
             options.add_experimental_option("excludeSwitches", ["enable-automation"])
             options.add_experimental_option('useAutomationExtension', False)
             options.add_argument("--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36")
             options.add_argument("--accept-language=en-US,en;q=0.9,es-US;q=0.8,es;q=0.7")
-            options.add_argument("--no-sandbox")
-            options.add_argument("--disable-dev-shm-usage")
-            options.add_argument("--window-size=1920,1080")
             options.set_capability('goog:loggingPrefs', {'performance': 'ALL'})
-            service = Service(ChromeDriverManager().install())
+            
+            # Set Chrome binary path for containerized environments
+            import os
+            chrome_binary = os.environ.get('CHROME_BIN') or os.environ.get('CHROME_PATH')
+            if chrome_binary:
+                options.binary_location = chrome_binary
+                print(f"   - usando Chrome binary: {chrome_binary}")
+            
+            # Use system chromedriver if available, otherwise download
+            chromedriver_path = os.environ.get('CHROMEDRIVER_PATH')
+            if chromedriver_path and os.path.exists(chromedriver_path):
+                service = Service(chromedriver_path)
+                print(f"   - usando chromedriver del sistema: {chromedriver_path}")
+            else:
+                service = Service(ChromeDriverManager().install())
+                print("   - descargando chromedriver...")
             driver = webdriver.Chrome(service=service, options=options)
         return driver
 
