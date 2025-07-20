@@ -499,17 +499,3 @@ docker run -p 8000:8000 scraper-lambda
 3. **Escalabilidad**: Múltiples tareas pueden ejecutarse simultáneamente
 4. **Reliability**: Mejor manejo de errores y recuperación
 5. **UX**: Mejor experiencia para el usuario final
-
-## remote access config 
-
-uvicorn app:app --host 0.0.0.0 --port 8080
-
-curl --location 'localhost:8080/api/scraper-footlocker/scrape' \
---header 'Content-Type: application/json' \
---data '{
-  "query": "Nike",
-  "max_pages": 100,
-  "max_detail_workers": 50,
-  "detail_delay": 1.0,
-  "api_delay": 3.0
-}'
