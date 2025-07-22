@@ -45,7 +45,8 @@ class FootlockerService:
     def _get_scraper_config(self, site_type: str = 'main') -> Dict[str, Any]:
         base_url_map = {
             'kids': "https://www.kidsfootlocker.com",
-            'main': "https://www.footlocker.com"
+            'main': "https://www.footlocker.com",
+            'champs': "https://www.champssports.com"
         }
         base_url = base_url_map.get(site_type, base_url_map['main'])
 

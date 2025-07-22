@@ -16,6 +16,7 @@ class FootlockerController:
         self.scraper_thread_pool = scraper_thread_pool
         self.router.add_api_route("/api/scraper-footlocker/scrape", self.start_scrape, methods=["POST"])
         self.router.add_api_route("/api/scraper-footlocker/scrape-kids", self.start_scrape_kids, methods=["POST"])
+        self.router.add_api_route("/api/scraper-footlocker/scrape-champs", self.start_scrape_champs, methods=["POST"])
     
     async def _run_scrape_task(self, request: FootlockerScrapeRequest, site_type: str):
         """Helper para ejecutar la tarea de scraping en segundo plano."""
@@ -79,4 +80,16 @@ class FootlockerController:
             "query": request.query,
             "max_pages": request.max_pages,
             "message": "Kids Footlocker scraping process initiated successfully",
+        } 
+
+    async def start_scrape_champs(self, request: FootlockerScrapeRequest, background_tasks: BackgroundTasks):
+        scraping_task, task_id = await self._run_scrape_task(request, site_type='champs')
+        background_tasks.add_task(scraping_task)
+        
+        return {
+            "task_id": task_id,
+            "status": "started",
+            "query": request.query,
+            "max_pages": request.max_pages,
+            "message": "Champs Sports scraping process initiated successfully",
         } 
