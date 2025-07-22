@@ -26,6 +26,7 @@ class FootlockerMapper:
             product.store_id = store_id
             product.lat = latitude
             product.lng = longitude
+            product.zipcode = zipcode
             
             zip_array = [zipcode] if zipcode else []
             product.available_zipcodes = zip_array
