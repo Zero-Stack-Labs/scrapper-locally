@@ -46,16 +46,16 @@ class FootlockerProductScraper:
 
     def make_request(self, url: str) -> Optional[requests.Response]:
         try:
-            logger.debug(f"Haciendo petición a página de producto: {url}")
+            logger.debug(f"Making request to product page: {url}")
             response = self.session.get(url, headers=self.headers, timeout=30)
-            logger.debug(f"Respuesta recibida de página: {response.status_code}")
+            logger.debug(f"Response received from page: {response.status_code}")
             
             if response.status_code != 200:
-                logger.error(f"Error response de página: {response.text[:200]}")
+                logger.error(f"Page error response: {response.text[:200]}")
             
             return response
         except requests.RequestException as e:
-            logger.error(f"Error en petición HTTP a página: {e}")
+            logger.error(f"HTTP request error to page: {e}")
             return None
 
     def get_product_details(self, product_id: str, delay: float = 1.0) -> Optional[Dict]:
@@ -75,7 +75,7 @@ class FootlockerProductScraper:
             
             json_ld_script = soup.find('script', {'id': 'productLdJson'})
             if not json_ld_script:
-                logger.error(f"No se encontró JSON-LD para el producto {product_id}")
+                logger.error(f"JSON-LD not found for product {product_id}")
                 return None
             
             product_data = json.loads(json_ld_script.string.strip())
@@ -98,7 +98,7 @@ class FootlockerProductScraper:
             )
             if detailed_variants:
                 detailed_product['variants'] = detailed_variants
-                logger.debug(f"Extraídas {len(detailed_variants)} variantes detalladas con UPC")
+                logger.debug(f"Extracted {len(detailed_variants)} detailed variants with UPC")
             else:
                 offers = product_data.get('offers', [])
                 if offers:
@@ -106,7 +106,7 @@ class FootlockerProductScraper:
                         offers, product_id, detailed_product['sku'], 
                         detailed_product['name'], detailed_product['image_url']
                     )
-                    logger.debug(f"Usando variantes básicas de offers: {len(detailed_product['variants'])}")
+                    logger.debug(f"Using basic variants from offers: {len(detailed_product['variants'])}")
             
             meta_description = soup.find('meta', {'name': 'description'})
             if meta_description and meta_description.get('content'):
@@ -150,7 +150,7 @@ class FootlockerProductScraper:
             start_index = html_content.find(start_pattern)
             
             if start_index == -1:
-                logger.debug(f"Patrón '\"sizes\":[' no encontrado para {product_id}")
+                logger.debug(f"Pattern '\"sizes\":[' not found for {product_id}")
                 return []
 
             # Mover el índice al inicio del array
@@ -174,10 +174,10 @@ class FootlockerProductScraper:
             return json.loads(sizes_content)
 
         except json.JSONDecodeError as e:
-            logger.error(f"Error parseando JSON extraído con balanceo para {product_id}: {e}")
+            logger.error(f"Error parsing extracted JSON with balancing for {product_id}: {e}")
             return []
         except Exception as e:
-            logger.error(f"Error inesperado en extracción con balanceo para {product_id}: {e}")
+            logger.error(f"Unexpected error in extraction with balancing for {product_id}: {e}")
             return []
 
     def _process_sizes_data(self, sizes_data: List[Dict], product_id: str, product_sku: str, product_name: str, fallback_image: str) -> List[Dict]:
@@ -191,7 +191,7 @@ class FootlockerProductScraper:
                 return []
             
             if len(sizes_data) == 0:
-                logger.warning(f"sizes_data está vacío para {product_id}")
+                logger.warning(f"sizes_data is empty for {product_id}")
                 return []
             
             variants = []
@@ -328,10 +328,10 @@ class FootlockerProductScraper:
                         logger.debug(f"✅ Detalles obtenidos para: {product_id}")
                     else:
                         failed_ids.append(product_id)
-                        logger.warning(f"❌ Falló obtener detalles para: {product_id}")
+                        logger.warning(f"❌ Failed to get details for: {product_id}")
                 except Exception as exc:
                     failed_ids.append(product_id)
-                    logger.error(f'❌ Excepción al procesar producto {product_id}: {exc}')
+                    logger.error(f'❌ Exception processing product {product_id}: {exc}')
         
         success_rate = len(detailed_products) / len(product_ids) * 100 if product_ids else 0
         logger.info(f"Detalles obtenidos exitosamente: {len(detailed_products)}/{len(product_ids)} productos ({success_rate:.1f}%)")

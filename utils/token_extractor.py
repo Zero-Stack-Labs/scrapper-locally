@@ -16,7 +16,7 @@ try:
     UNDETECTED_AVAILABLE = True
 except ImportError:
     UNDETECTED_AVAILABLE = False
-    print("⚠️ Para mejor evasión, instala: pip install undetected-chromedriver")
+    print("⚠️ For better evasion, install: pip install undetected-chromedriver")
 
 
 class AntiDetectionExtractor:
@@ -27,20 +27,20 @@ class AntiDetectionExtractor:
 
     def setup_driver(self, headless: bool):
         if self.use_undetected:
-            print("🔧 Usando undetected-chromedriver...")
+            print("🔧 Using undetected-chromedriver...")
             options = uc.ChromeOptions()
             options.add_argument('--incognito')
             options.set_capability('goog:loggingPrefs', {'performance': 'ALL'})
             
             driver = uc.Chrome(options=options, headless=headless)
             if headless:
-                print("   - en modo headless.")
+                print("   - in headless mode.")
         else:
-            print("🔧 Usando ChromeDriver normal con evasión avanzada...")
+            print("🔧 Using normal ChromeDriver with advanced evasion...")
             options = Options()
             options.add_argument('--incognito')
             if headless:
-                print("   - en modo headless.")
+                print("   - in headless mode.")
                 options.add_argument('--headless=new')
                 options.add_argument('--disable-gpu')
             options.add_argument("--disable-blink-features=AutomationControlled")
@@ -60,30 +60,30 @@ class AntiDetectionExtractor:
         try:
             WebDriverWait(self.driver, 10).until(EC.element_to_be_clickable(element))
             element.click()
-            print("✅ Click ejecutado.")
+            print("✅ Click executed.")
             return True
         except Exception as e:
-            print(f"⚠️ Error al hacer click: {e}")
+            print(f"⚠️ Error clicking: {e}")
             return False
 
     def find_and_click_pagination(self, page_number=3):
-        print(f"🔍 Buscando el enlace de paginación para la página {page_number}...")
+        print(f"🔍 Looking for pagination link for page {page_number}...")
         try:
             wait = WebDriverWait(self.driver, 10)
             wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, "nav.Pagination, nav[aria-label*='Pagination']")))
             strategy = f"//nav[contains(@class, 'Pagination')]//a[text()='{page_number}' and not(@aria-current='true')]"
             element = self.driver.find_element(By.XPATH, strategy)
-            print(f"✅ Enlace encontrado: '{element.text}'")
+            print(f"✅ Link found: '{element.text}'")
             return self._click_element(element)
         except (NoSuchElementException, TimeoutException):
-            print(f"❌ No se encontró el enlace para la página {page_number}.")
+            print(f"❌ Link not found for page {page_number}.")
             return False
         except Exception as e:
-            print(f"⚠️ Error inesperado en paginación: {e}")
+            print(f"⚠️ Unexpected error in pagination: {e}")
             return False
             
     def _wait_for_search_token(self, timeout=15):
-        print("🕵️‍♂️ Escuchando el tráfico de red en busca del token...")
+        print("🕵️‍♂️ Listening to network traffic for token...")
         start_time = time.time()
         
         while time.time() - start_time < timeout:
@@ -98,43 +98,43 @@ class AntiDetectionExtractor:
                             headers = log['params'].get('request', {}).get('headers', {})
                             if 'x-kpsdk-ct' in headers:
                                 self._captured_token = headers['x-kpsdk-ct']
-                                print("✅✅ Token 'x-kpsdk-ct' encontrado.")
+                                print("✅✅ Token 'x-kpsdk-ct' found.")
                                 return True
             except Exception:
                 pass
             time.sleep(0.5)
         
-        print("⚠️ No se encontró la petición de búsqueda con el token en los logs de red.")
+        print("⚠️ Search request with token not found in network logs.")
         return False
 
     def get_token(self, target_url: str):
         try:
-            print(f"🚀 Iniciando extracción rápida de token desde: {target_url}")
+            print(f"🚀 Starting fast token extraction from: {target_url}")
             
             self.driver.get(target_url)
             
             try:
                 agree_button = WebDriverWait(self.driver, 5).until(EC.element_to_be_clickable((By.ID, "touAgreeBtn")))
-                print("✅ Botón de consentimiento encontrado. Haciendo click...")
+                print("✅ Consent button found. Clicking...")
                 self._click_element(agree_button)
             except TimeoutException:
-                print("INFO: No se encontró el botón de consentimiento (o no fue necesario).")
+                print("INFO: Consent button not found (or not necessary).")
 
-            print("🧹 Limpiando logs de red antes de la acción...")
+            print("🧹 Clearing network logs before action...")
             self.driver.get_log('performance')
             
             if self.find_and_click_pagination(page_number=3):
                 if not self._wait_for_search_token(timeout=15):
-                    print("❌ No se capturó el token después del click de paginación.")
+                    print("❌ Token not captured after pagination click.")
             else:
-                print("❌ La acción de paginación falló. No se pudo generar la petición.")
+                print("❌ Pagination action failed. Could not generate request.")
 
         except Exception as e:
-            print(f"❌ Error catastrófico durante la extracción: {e}")
+            print(f"❌ Catastrophic error during extraction: {e}")
         
         return self._captured_token
 
     def close(self):
         if self.driver:
             self.driver.quit()
-            print("✅ Navegador cerrado.")
+            print("✅ Browser closed.")

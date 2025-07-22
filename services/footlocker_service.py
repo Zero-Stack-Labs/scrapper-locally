@@ -19,23 +19,23 @@ class FootlockerService:
         token = None
         extractor = None
         try:
-            logger.info(f"Iniciando extracción de token para {base_url} y tienda {store_id}...")
+            logger.info(f"Starting token extraction for {base_url} and store {store_id}...")
             
             target_url = f"{base_url}/category/brands/nike.htm"
             if store_id:
                 target_url += f"?storeID={store_id}"
             
-            # Usamos headless=False porque es la configuración que ha demostrado ser robusta.
+            # Using headless=False because it's the configuration that has proven robust.
             extractor = AntiDetectionExtractor(use_undetected=True, headless=False)
             token = extractor.get_token(target_url=target_url)
 
             if token:
-                logger.info(f"✅ Token de seguridad obtenido con éxito para {base_url}")
+                logger.info(f"✅ Security token obtained successfully for {base_url}")
             else:
-                logger.warning(f"⚠️ No se pudo obtener el token de seguridad para {base_url}")
+                logger.warning(f"⚠️ Could not obtain security token for {base_url}")
 
         except Exception as e:
-            logger.error(f"Error al ejecutar AntiDetectionExtractor: {e}")
+            logger.error(f"Error running AntiDetectionExtractor: {e}")
         finally:
             if extractor:
                 extractor.close()
@@ -56,7 +56,7 @@ class FootlockerService:
         location_data = locations_config.get(site_type)
 
         if not location_data:
-            raise ValueError(f"No se encontró configuración de ubicación para site_type: {site_type}")
+            raise ValueError(f"Location configuration not found for site_type: {site_type}")
         
         store_id = location_data.get("store_id", "")
         x_kpsdk_ct = self._get_dynamic_header(base_url, store_id)
@@ -101,17 +101,17 @@ class FootlockerService:
             )
             
             if not products:
-                logger.warning("No se encontraron productos")
+                logger.warning("No products found")
                 return {
                     "success": True,
                     "products_scraped": 0,
                     "query": query,
-                    "message": "No se encontraron productos para la búsqueda especificada"
+                    "message": "No products found for the specified search"
                 }
             
             total_saved = self._save_products_to_db(products)
             
-            logger.info(f"Scraping completado: {len(products)} productos obtenidos, {total_saved} guardados")
+            logger.info(f"Scraping completed: {len(products)} products obtained, {total_saved} saved")
             
             return {
                 "success": True,

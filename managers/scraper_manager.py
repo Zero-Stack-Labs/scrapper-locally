@@ -88,7 +88,7 @@ class ScraperManager:
                     })
         
         if all_products:
-            logger.info(f"Generando análisis de stock para {len(all_products)} productos...")
+            logger.info(f"Generating stock analysis for {len(all_products)} products...")
             self.generate_stock_analysis(all_products, locations)
         
         self.update_task_status(
@@ -107,6 +107,6 @@ class ScraperManager:
             from utils.stock_analyzer import StockAnalyzer
             analyzer = StockAnalyzer(str(self.output_dir))
             analyzer.generate_stock_analysis_files(all_products, locations)
-            logger.info("✅ Análisis de stock y upsert completados")
+            logger.info("✅ Stock analysis and upsert completed")
         except Exception as e:
-            logger.error(f"❌ Error en análisis de stock: {e}", exc_info=True)
+            logger.error(f"❌ Error in stock analysis: {e}", exc_info=True)

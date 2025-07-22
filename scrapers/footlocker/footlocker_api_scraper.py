@@ -25,16 +25,16 @@ class FootlockerApiScraper:
 
     def make_request(self, url: str) -> Optional[requests.Response]:
         try:
-            logger.info(f"Haciendo petición a API Footlocker: {url}")
+            logger.info(f"Making request to Footlocker API: {url}")
             response = self.session.get(url, headers=self.headers, timeout=30)
-            logger.info(f"Respuesta recibida de API: {response.status_code}")
+            logger.info(f"Response received from API: {response.status_code}")
             
             if response.status_code != 200:
-                logger.error(f"Error response de API: {response.text[:200]}")
+                logger.error(f"API error response: {response.text[:200]}")
             
             return response
         except requests.RequestException as e:
-            logger.error(f"Error en petición HTTP a API: {e}")
+            logger.error(f"HTTP request error to API: {e}")
             return None
 
     def scrape_products_page(self, query: str = "Nike", current_page: int = 0, 
@@ -46,12 +46,12 @@ class FootlockerApiScraper:
         if self.store_id:
             url += f"&storeID={self.store_id}"
         
-        logger.info(f"Scrapeando página {current_page} de API Footlocker para query '{query}'")
+        logger.info(f"Scraping page {current_page} from Footlocker API for query '{query}'")
         
         response = self.make_request(url)
         
         if not response:
-            logger.error("Error al obtener datos de API Footlocker: No response")
+            logger.error("Error getting data from Footlocker API: No response")
             return []
             
         if response.status_code != 200:
@@ -62,7 +62,7 @@ class FootlockerApiScraper:
             data = response.json()
             products_data = data.get('products', [])
             
-            logger.info(f"Encontrados {len(products_data)} productos en la página {current_page}")
+            logger.info(f"Found {len(products_data)} products on page {current_page}")
             
             products = []
             for product_data in products_data:
@@ -78,10 +78,10 @@ class FootlockerApiScraper:
             return products
             
         except json.JSONDecodeError as e:
-            logger.error(f"Error al parsear JSON de API Footlocker: {e}")
+            logger.error(f"Error parsing JSON from Footlocker API: {e}")
             return []
         except Exception as e:
-            logger.error(f"Error inesperado al procesar productos de API Footlocker: {e}")
+            logger.error(f"Unexpected error processing products from Footlocker API: {e}")
             return []
 
     def scrape_all_products(self, query: str = "Nike", max_pages: int = None, page_size: int = 100, delay: int = 5,
@@ -91,7 +91,7 @@ class FootlockerApiScraper:
         
         while True:
             if max_pages is not None and current_page >= max_pages:
-                logger.info(f"Alcanzado límite máximo de páginas ({max_pages}). Terminando scraping.")
+                logger.info(f"Reached maximum page limit ({max_pages}). Ending scraping.")
                 break
                 
             products = self.scrape_products_page(
@@ -100,17 +100,17 @@ class FootlockerApiScraper:
             )
             
             if not products:
-                logger.info(f"No se encontraron productos en la página {current_page}. Terminando scraping.")
+                logger.info(f"No products found on page {current_page}. Ending scraping.")
                 break
             
             all_products.extend(products)
-            logger.info(f"Total de productos scrapeados hasta ahora: {len(all_products)}")
+            logger.info(f"Total products scraped so far: {len(all_products)}")
             
             current_page += 1
             
-            # Aplicar delay entre páginas si no es la última página y hay más páginas por procesar
+            # Apply delay between pages if not the last page and there are more pages to process
             if max_pages is None or current_page < max_pages:
-                logger.info(f"Esperando {delay} segundos antes de la siguiente página...")
+                logger.info(f"Waiting {delay} seconds before next page...")
                 time.sleep(delay)
         
         logger.info(f"Scraping de API completado. Total: {len(all_products)} productos")

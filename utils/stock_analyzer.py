@@ -22,7 +22,7 @@ class StockAnalyzer:
         
         if self.enable_db_upsert:
             self.product_repository = ProductRepository()
-            logger.info("StockAnalyzer inicializado con upsert automático habilitado")
+            logger.info("StockAnalyzer initialized with automatic upsert enabled")
         else:
             self.product_repository = None
     
