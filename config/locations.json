@@ -1,20 +1,98 @@
 {
-  "main": {
-    "latitude": 32.722563,
-    "longitude": -96.834570,
-    "store_id": "0308563",
-    "zipcode": "75224"
-  },
-  "kids": {
-    "latitude": 32.839232,
-    "longitude": -96.995426,
-    "store_id": "1646452",
-    "zipcode": "75224"
-  },
-  "champs": {
-    "latitude": 32.662156,
-    "longitude": -96.878629,
-    "store_id": "1814395",
-    "zipcode": "75224"
-  }
+  "main": [
+    {
+      "latitude": 32.722563,
+      "longitude": -96.834570,
+      "store_id": "0308563",
+      "zipcode": "75224"
+    },
+    {
+      "latitude": 32.865345,
+      "longitude": -96.773146,
+      "store_id": "0325017",
+      "zipcode": "75225"
+    },
+    {
+      "latitude": 32.809732,
+      "longitude": -96.624284,
+      "store_id": "0307121",
+      "zipcode": "75149"
+    },
+    {
+      "latitude": 32.709263,
+      "longitude": -96.801004,
+      "store_id": "0308674",
+      "zipcode": "75216"
+    },
+    {
+      "latitude": 32.861561,
+      "longitude": -96.858713,
+      "store_id": "0308351",
+      "zipcode": "75220"
+    }
+  ],
+  "kids": [
+    {
+      "latitude": 32.839232,
+      "longitude": -96.995426,
+      "store_id": "1646452",
+      "zipcode": "75224"
+    },
+    {
+      "latitude": 32.968169,
+      "longitude": -97.045196,
+      "store_id": "1646529",
+      "zipcode": "75225"
+    },
+    {
+      "latitude": 32.809790,
+      "longitude": -96.624546,
+      "store_id": "1606868",
+      "zipcode": "75149"
+    },
+    {
+      "latitude": 32.720489,
+      "longitude": -96.833611,
+      "store_id": "1648520",
+      "zipcode": "75216"
+    },
+    {
+      "latitude": 32.865309,
+      "longitude": -96.773361,
+      "store_id": "1648920",
+      "zipcode": "75220"
+    }
+  ],
+  "champs": [
+    {
+      "latitude": 32.662156,
+      "longitude": -96.878629,
+      "store_id": "1814395",
+      "zipcode": "75224"
+    },
+    {
+      "latitude": 32.871553,
+      "longitude": -96.763806,
+      "store_id": "1815146",
+      "zipcode": "75225"
+    },
+    {
+      "latitude": 32.809732,
+      "longitude": -96.624316,
+      "store_id": "1814316",
+      "zipcode": "75149"
+    },
+    {
+      "latitude": 32.662111,
+      "longitude": -96.879112,
+      "store_id": "1814395",
+      "zipcode": "75216"
+    },
+    {
+      "latitude": 32.929714,
+      "longitude": -96.820964,
+      "store_id": "1814579",
+      "zipcode": "75220"
+    }
+  ]
 }
