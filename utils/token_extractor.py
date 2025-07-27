@@ -2,40 +2,6 @@
 import time
 import json
 import random
-import os
-import tempfile
-
-# Set up container environment variables BEFORE importing Chrome-related modules
-if os.path.exists('/.dockerenv') or os.environ.get('KUBERNETES_SERVICE_HOST'):
-    temp_base = tempfile.mkdtemp(prefix='chrome_cache_')
-    
-    # WebDriver Manager cache
-    wdm_cache_dir = os.path.join(temp_base, 'wdm')
-    os.makedirs(wdm_cache_dir, exist_ok=True)
-    os.environ['WDM_LOCAL'] = wdm_cache_dir
-    os.environ['WDM_LOG_LEVEL'] = '0'
-    
-    # Set HOME and other directories for undetected-chromedriver
-    os.environ['HOME'] = temp_base
-    os.environ['XDG_CACHE_HOME'] = os.path.join(temp_base, 'cache')
-    os.environ['XDG_DATA_HOME'] = os.path.join(temp_base, 'data')
-    os.environ['XDG_CONFIG_HOME'] = os.path.join(temp_base, 'config')
-    
-    # Additional undetected-chromedriver specific paths
-    os.environ['TMPDIR'] = temp_base
-    os.environ['TEMP'] = temp_base
-    os.environ['TMP'] = temp_base
-    
-    # Undetected chromedriver specific cache directory
-    os.environ['UC_CACHE_DIR'] = os.path.join(temp_base, 'uc_cache')
-    os.makedirs(os.environ['UC_CACHE_DIR'], exist_ok=True)
-    
-    # Create necessary directories
-    for env_var in ['XDG_CACHE_HOME', 'XDG_DATA_HOME', 'XDG_CONFIG_HOME']:
-        os.makedirs(os.environ[env_var], exist_ok=True)
-    
-    print(f"🐳 Container environment variables set up in: {temp_base}")
-
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
@@ -66,72 +32,28 @@ class AntiDetectionExtractor:
             options.add_argument('--incognito')
             options.set_capability('goog:loggingPrefs', {'performance': 'ALL'})
             
-            # Container-specific settings
-            if os.path.exists('/.dockerenv') or os.environ.get('KUBERNETES_SERVICE_HOST'):
-                print("🐳 Container environment detected - configuring for GKE...")
-                temp_dir = tempfile.mkdtemp()
-                options.add_argument(f'--user-data-dir={temp_dir}')
-                options.add_argument('--no-sandbox')
-                options.add_argument('--disable-dev-shm-usage')
-                options.add_argument('--disable-gpu')
-                options.add_argument('--remote-debugging-port=9222')
-                
-                # Try to use system Chrome if available
-                chrome_bin = os.environ.get('CHROME_BIN', '/usr/bin/chromium-browser')
-                if os.path.exists(chrome_bin):
-                    options.binary_location = chrome_bin
-                    print(f"   - Using Chrome binary: {chrome_bin}")
-                
-                try:
-                    driver = uc.Chrome(options=options, headless=headless, version_main=None)
-                except Exception as e:
-                    print(f"⚠️ Undetected Chrome failed in container: {e}")
-                    print("🔄 Falling back to regular ChromeDriver...")
-                    return self._setup_regular_driver(headless=True)
-            else:
-                driver = uc.Chrome(options=options, headless=headless)
-                
+            driver = uc.Chrome(options=options, headless=headless)
             if headless:
                 print("   - in headless mode.")
         else:
-            return self._setup_regular_driver(headless=headless)
-        return driver
-    
-    def _setup_regular_driver(self, headless: bool):
-        print("🔧 Using normal ChromeDriver with advanced evasion...")
-        options = Options()
-        options.add_argument('--incognito')
-        if headless:
-            print("   - in headless mode.")
-            options.add_argument('--headless=new')
-            options.add_argument('--disable-gpu')
-        options.add_argument("--disable-blink-features=AutomationControlled")
-        options.add_experimental_option("excludeSwitches", ["enable-automation"])
-        options.add_experimental_option('useAutomationExtension', False)
-        options.add_argument("--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36")
-        options.add_argument("--accept-language=en-US,en;q=0.9,es-US;q=0.8,es;q=0.7")
-        options.add_argument("--no-sandbox")
-        options.add_argument("--disable-dev-shm-usage")
-        options.add_argument("--window-size=1920,1080")
-        options.set_capability('goog:loggingPrefs', {'performance': 'ALL'})
-        
-        # Container-specific settings
-        if os.path.exists('/.dockerenv') or os.environ.get('KUBERNETES_SERVICE_HOST'):
-            temp_dir = tempfile.mkdtemp()
-            options.add_argument(f'--user-data-dir={temp_dir}')
-            
-            # Use system chromedriver if available
-            chromedriver_path = os.environ.get('CHROMEDRIVER_PATH', '/usr/bin/chromedriver')
-            if os.path.exists(chromedriver_path):
-                service = Service(chromedriver_path)
-                print(f"   - Using system chromedriver: {chromedriver_path}")
-            else:
-                print(f"   - Using WebDriverManager with cache: {os.environ.get('WDM_LOCAL', 'default')}")
-                service = Service(ChromeDriverManager().install())
-        else:
+            print("🔧 Using normal ChromeDriver with advanced evasion...")
+            options = Options()
+            options.add_argument('--incognito')
+            if headless:
+                print("   - in headless mode.")
+                options.add_argument('--headless=new')
+                options.add_argument('--disable-gpu')
+            options.add_argument("--disable-blink-features=AutomationControlled")
+            options.add_experimental_option("excludeSwitches", ["enable-automation"])
+            options.add_experimental_option('useAutomationExtension', False)
+            options.add_argument("--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36")
+            options.add_argument("--accept-language=en-US,en;q=0.9,es-US;q=0.8,es;q=0.7")
+            options.add_argument("--no-sandbox")
+            options.add_argument("--disable-dev-shm-usage")
+            options.add_argument("--window-size=1920,1080")
+            options.set_capability('goog:loggingPrefs', {'performance': 'ALL'})
             service = Service(ChromeDriverManager().install())
-            
-        driver = webdriver.Chrome(service=service, options=options)
+            driver = webdriver.Chrome(service=service, options=options)
         return driver
 
     def _click_element(self, element):

@@ -1,8 +1,8 @@
 import json
-import os
 from typing import List, Dict, Any, Optional
 from scrapers.footlocker.footlocker_scraper import FootlockerScraper
 from repositories.product_repository import ProductRepository
+from utils.gke_token_extractor import GKEAntiDetectionExtractor
 from utils.logging_config import get_logger
 from utils.footlocker_stock_analyzer import FootlockerStockAnalyzer
 from datetime import datetime
@@ -28,8 +28,8 @@ class FootlockerService:
             if store_id:
                 target_url += f"?storeID={store_id}"
 
-            is_container = os.path.exists('/.dockerenv') or os.environ.get('KUBERNETES_SERVICE_HOST')
-            extractor = AntiDetectionExtractor(use_undetected=True, headless=is_container)
+            #extractor = AntiDetectionExtractor(use_undetected=True, headless=False)
+            extractor = GKEAntiDetectionExtractor(use_undetected=True, headless=True)
             token = extractor.get_token(target_url=target_url)
 
             if token:
