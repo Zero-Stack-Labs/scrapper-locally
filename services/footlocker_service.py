@@ -38,7 +38,10 @@ class FootlockerService:
                 logger.warning(f"⚠️ Could not obtain security token for {base_url}")
 
         except Exception as e:
-            logger.error(f"Error running AntiDetectionExtractor: {e}")
+            logger.error(f"Error running GKEAntiDetectionExtractor: {e}")
+            logger.error(f"Error type: {type(e).__name__}")
+            if "Binary Location Must be a String" in str(e):
+                logger.error("🐳 Chrome binary not found in container. Check Dockerfile for Chrome installation.")
         finally:
             if extractor:
                 extractor.close()

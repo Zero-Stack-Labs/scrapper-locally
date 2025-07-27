@@ -28,29 +28,77 @@ class GKEAntiDetectionExtractor:
 
     def setup_driver(self, headless: bool):
         if self.use_undetected:
-            print("🔧 Using undetected-chromedriver for GKE...")
-            options = uc.ChromeOptions()
-            options.add_argument('--incognito')
-            options.add_argument('--no-sandbox')
-            options.add_argument('--disable-dev-shm-usage')
-            options.add_argument('--disable-gpu')
-            options.add_argument('--remote-debugging-port=9222')
-            options.add_argument('--disable-extensions')
-            options.add_argument('--disable-plugins')
-            options.add_argument('--disable-images')
-            options.add_argument('--disable-javascript')
-            options.add_argument('--window-size=1920,1080')
-            options.add_argument('--start-maximized')
-            options.add_argument('--disable-web-security')
-            options.add_argument('--disable-features=VizDisplayCompositor')
-            options.set_capability('goog:loggingPrefs', {'performance': 'ALL'})
-            
-            driver = uc.Chrome(options=options, headless=headless, version_main=None)
-            if headless:
-                print("   - in headless mode optimized for GKE.")
+            print("🔧 Attempting undetected-chromedriver for GKE...")
+            try:
+                options = uc.ChromeOptions()
+                
+                chrome_paths = [
+                    '/usr/bin/google-chrome',
+                    '/usr/bin/google-chrome-stable',
+                    '/usr/bin/chromium-browser',
+                    '/usr/bin/chromium',
+                    '/opt/google/chrome/chrome'
+                ]
+                
+                chrome_binary = None
+                for path in chrome_paths:
+                    if os.path.exists(path):
+                        chrome_binary = path
+                        print(f"✅ Found Chrome binary at: {chrome_binary}")
+                        break
+                
+                if chrome_binary:
+                    options.binary_location = chrome_binary
+                
+                options.add_argument('--incognito')
+                options.add_argument('--no-sandbox')
+                options.add_argument('--disable-dev-shm-usage')
+                options.add_argument('--disable-gpu')
+                options.add_argument('--remote-debugging-port=9222')
+                options.add_argument('--disable-extensions')
+                options.add_argument('--disable-plugins')
+                options.add_argument('--disable-images')
+                options.add_argument('--window-size=1920,1080')
+                options.add_argument('--start-maximized')
+                options.add_argument('--disable-web-security')
+                options.add_argument('--disable-features=VizDisplayCompositor')
+                options.add_argument('--disable-background-timer-throttling')
+                options.add_argument('--disable-backgrounding-occluded-windows')
+                options.add_argument('--disable-renderer-backgrounding')
+                options.set_capability('goog:loggingPrefs', {'performance': 'ALL'})
+                
+                driver = uc.Chrome(options=options, headless=headless, version_main=None)
+                if headless:
+                    print("   - in headless mode optimized for GKE.")
+                print("✅ Successfully initialized undetected-chromedriver")
+                
+            except Exception as e:
+                print(f"⚠️ undetected-chromedriver failed: {e}")
+                print("🔄 Falling back to regular ChromeDriver...")
+                self.use_undetected = False
+                return self.setup_driver(headless)
         else:
             print("🔧 Using normal ChromeDriver with GKE optimizations...")
             options = Options()
+            
+            chrome_paths = [
+                '/usr/bin/google-chrome',
+                '/usr/bin/google-chrome-stable',
+                '/usr/bin/chromium-browser',
+                '/usr/bin/chromium',
+                '/opt/google/chrome/chrome'
+            ]
+            
+            chrome_binary = None
+            for path in chrome_paths:
+                if os.path.exists(path):
+                    chrome_binary = path
+                    print(f"✅ Found Chrome binary at: {chrome_binary}")
+                    break
+            
+            if chrome_binary:
+                options.binary_location = chrome_binary
+            
             options.add_argument('--incognito')
             options.add_argument('--no-sandbox')
             options.add_argument('--disable-dev-shm-usage')
@@ -63,6 +111,9 @@ class GKEAntiDetectionExtractor:
             options.add_argument('--start-maximized')
             options.add_argument('--disable-web-security')
             options.add_argument('--disable-features=VizDisplayCompositor')
+            options.add_argument('--disable-background-timer-throttling')
+            options.add_argument('--disable-backgrounding-occluded-windows')
+            options.add_argument('--disable-renderer-backgrounding')
             
             if headless:
                 print("   - in headless mode optimized for GKE.")
@@ -84,8 +135,13 @@ class GKEAntiDetectionExtractor:
             options.add_argument("--accept=text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
             options.set_capability('goog:loggingPrefs', {'performance': 'ALL'})
             
-            service = Service(ChromeDriverManager().install())
-            driver = webdriver.Chrome(service=service, options=options)
+            try:
+                service = Service(ChromeDriverManager().install())
+                driver = webdriver.Chrome(service=service, options=options)
+                print("✅ Successfully initialized regular ChromeDriver")
+            except Exception as e:
+                print(f"❌ Failed to initialize ChromeDriver: {e}")
+                raise Exception(f"Could not initialize any Chrome driver: {e}")
         
         self._add_stealth_scripts(driver)
         return driver
