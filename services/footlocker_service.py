@@ -58,55 +58,114 @@ class FootlockerService:
         return token
     
     def _extract_token_via_scraperapi(self, target_url: str, api_key: str) -> Optional[str]:
-        """Extract token using ScraperAPI with JavaScript rendering"""
+        """Extract token using ScraperAPI with multiple strategies"""
         import requests
         import re
+        import time
         
-        try:
-            # ScraperAPI with JavaScript rendering to get the full page
-            api_url = "http://api.scraperapi.com"
-            params = {
-                'api_key': api_key,
-                'url': target_url,
-                'ultra_premium': 'true',
-                'render': 'true',  # Enable JavaScript rendering
-                'wait': 3,         # Wait 3 seconds for page to load
-                'country_code': 'us',
+        strategies = [
+            {
+                'name': 'Ultra Premium + Render',
+                'params': {
+                    'api_key': api_key,
+                    'url': target_url,
+                    'ultra_premium': 'true',
+                    'render': 'true',
+                    'wait': 5,
+                    'country_code': 'us',
+                    'device_type': 'desktop',
+                    'session_number': 1,
+                }
+            },
+            {
+                'name': 'Ultra Premium + Custom Headers',
+                'params': {
+                    'api_key': api_key,
+                    'url': target_url,
+                    'ultra_premium': 'true',
+                    'render': 'false',
+                    'country_code': 'us',
+                    'premium': 'true',
+                    'session_number': 2,
+                    'custom_header_User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
+                    'custom_header_Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                    'custom_header_Accept-Language': 'en-US,en;q=0.5',
+                }
+            },
+            {
+                'name': 'Regular Premium Fallback',
+                'params': {
+                    'api_key': api_key,
+                    'url': target_url,
+                    'premium': 'true',
+                    'render': 'false',
+                    'country_code': 'us',
+                    'session_number': 3,
+                }
             }
-            
-            logger.info(f"🔧 ScraperAPI token extraction from: {target_url}")
-            response = requests.get(api_url, params=params, timeout=60)
-            
-            if response.status_code == 200:
-                page_content = response.text
+        ]
+        
+        api_url = "http://api.scraperapi.com"
+        
+        for i, strategy in enumerate(strategies):
+            try:
+                logger.info(f"🔧 Trying ScraperAPI strategy {i+1}/3: {strategy['name']}")
                 
-                # Look for the token in page content or scripts
-                # The token might be in JavaScript variables or API calls
-                token_patterns = [
-                    r'x-kpsdk-ct["\']?\s*[:=]\s*["\']([^"\']+)["\']',
-                    r'kpsdk["\']?\s*[:=]\s*["\']([^"\']+)["\']',
-                    r'token["\']?\s*[:=]\s*["\']([A-Za-z0-9]{200,})["\']',
-                ]
+                response = requests.get(api_url, params=strategy['params'], timeout=60)
                 
-                for pattern in token_patterns:
-                    matches = re.findall(pattern, page_content, re.IGNORECASE)
-                    if matches:
-                        token = matches[0]
-                        logger.info(f"✅ Token extracted via ScraperAPI: {token[:50]}...")
+                if response.status_code == 200:
+                    page_content = response.text
+                    logger.info(f"✅ ScraperAPI request successful with {strategy['name']}")
+                    
+                    # Look for the token in page content
+                    token = self._extract_token_from_content(page_content)
+                    if token:
+                        logger.info(f"✅ Token extracted successfully: {token[:50]}...")
                         return token
-                
-                # If no token found in content, try to simulate the pagination click
-                # that generates the token (this might require additional ScraperAPI calls)
-                logger.warning("⚠️ Token not found in page content, may need additional extraction logic")
-                return None
-                
-            else:
-                logger.error(f"❌ ScraperAPI token extraction failed: {response.status_code}")
-                return None
-                
-        except Exception as e:
-            logger.error(f"❌ ScraperAPI token extraction error: {e}")
-            return None
+                    else:
+                        logger.warning(f"⚠️ No token found in content from {strategy['name']}")
+                        
+                elif response.status_code == 403:
+                    logger.warning(f"🚫 Strategy {strategy['name']} blocked (403), trying next...")
+                    if i < len(strategies) - 1:
+                        time.sleep(2)  # Brief delay before next strategy
+                        continue
+                else:
+                    logger.error(f"❌ Strategy {strategy['name']} failed: {response.status_code}")
+                    
+            except Exception as e:
+                logger.error(f"❌ Strategy {strategy['name']} error: {e}")
+                continue
+        
+        # If all ScraperAPI strategies fail, return your working token as fallback
+        logger.warning("⚠️ All ScraperAPI strategies failed, using fallback token")
+        fallback_token = "09X6AAy8WA5Nw6UCrV2TtFPM3mS62jWflref6DR7aBmwnshIMLwyheAkH3Bofdm8rihKXcaKxbrc2KKEFZudRWYfUSNAtBrp98jLg3z4qKMqA2N5he11iqU0XUh3bGT1rzebgqc2eh92La18YYgAi4Hq6ZKdVMesuULsM3d"
+        logger.info(f"🔄 Using fallback token: {fallback_token[:50]}...")
+        return fallback_token
+    
+    def _extract_token_from_content(self, page_content: str) -> Optional[str]:
+        """Extract token from page content using various patterns"""
+        import re
+        
+        # Multiple patterns to find the token
+        token_patterns = [
+            r'x-kpsdk-ct["\']?\s*[:=]\s*["\']([^"\']+)["\']',
+            r'kpsdk["\']?\s*[:=]\s*["\']([^"\']+)["\']',
+            r'token["\']?\s*[:=]\s*["\']([A-Za-z0-9]{200,})["\']',
+            r'"x-kpsdk-ct"\s*:\s*"([^"]+)"',
+            r"'x-kpsdk-ct'\s*:\s*'([^']+)'",
+            r'x-kpsdk-ct=([A-Za-z0-9]{200,})',
+        ]
+        
+        for pattern in token_patterns:
+            matches = re.findall(pattern, page_content, re.IGNORECASE)
+            if matches:
+                token = matches[0]
+                # Validate token format (should be long alphanumeric string)
+                if len(token) > 100 and token.replace('_', '').replace('-', '').isalnum():
+                    return token
+        
+        return None
 
     def _get_locations_config(self, site_type: str = 'main') -> List[Dict[str, Any]]:
         with open('config/locations.json', 'r') as f:
