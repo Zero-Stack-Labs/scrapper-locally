@@ -98,7 +98,7 @@ class AntiDetectionExtractor:
                             headers = log['params'].get('request', {}).get('headers', {})
                             if 'x-kpsdk-ct' in headers:
                                 self._captured_token = headers['x-kpsdk-ct']
-                                print("✅✅ Token 'x-kpsdk-ct' found.")
+                                print("✅✅ Token 'x-kpsdk-ct' found: {}".format(self._captured_token))
                                 return True
             except Exception:
                 pass

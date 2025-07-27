@@ -1,8 +1,8 @@
 import json
+import os
 from typing import List, Dict, Any, Optional
 from scrapers.footlocker.footlocker_scraper import FootlockerScraper
 from repositories.product_repository import ProductRepository
-from utils.gke_token_extractor import GKEAntiDetectionExtractor
 from utils.logging_config import get_logger
 from utils.footlocker_stock_analyzer import FootlockerStockAnalyzer
 from datetime import datetime
@@ -21,6 +21,11 @@ class FootlockerService:
     def _get_dynamic_header(self, base_url: str, store_id: str) -> Optional[str]:
         token = None
         extractor = None
+        
+        # Check if we're in container environment and have ScraperAPI available
+        is_container = os.path.exists('/.dockerenv') or os.environ.get('KUBERNETES_SERVICE_HOST')
+        scraperapi_key = os.environ.get('SCRAPERAPI_KEY')
+        
         try:
             logger.info(f"Starting token extraction for {base_url} and store {store_id}...")
             
@@ -28,9 +33,15 @@ class FootlockerService:
             if store_id:
                 target_url += f"?storeID={store_id}"
 
-            #extractor = AntiDetectionExtractor(use_undetected=True, headless=False)
-            extractor = GKEAntiDetectionExtractor(use_undetected=True, headless=True)
-            token = extractor.get_token(target_url=target_url)
+            if is_container and scraperapi_key:
+                # Use ScraperAPI for token extraction in container environment
+                logger.info("🌐 Using ScraperAPI for token extraction in container environment")
+                token = self._extract_token_via_scraperapi(target_url, scraperapi_key)
+            else:
+                # Use local browser extraction
+                logger.info("🏠 Using local browser for token extraction")
+                extractor = AntiDetectionExtractor(use_undetected=True, headless=is_container)
+                token = extractor.get_token(target_url=target_url)
 
             if token:
                 logger.info(f"✅ Security token obtained successfully for {base_url}")
@@ -38,12 +49,64 @@ class FootlockerService:
                 logger.warning(f"⚠️ Could not obtain security token for {base_url}")
 
         except Exception as e:
-            logger.error(f"Error running AntiDetectionExtractor: {e}")
+            logger.error(f"Error running token extraction: {e}")
+            logger.error(f"Error type: {type(e).__name__}")
         finally:
             if extractor:
                 extractor.close()
         
         return token
+    
+    def _extract_token_via_scraperapi(self, target_url: str, api_key: str) -> Optional[str]:
+        """Extract token using ScraperAPI with JavaScript rendering"""
+        import requests
+        import re
+        
+        try:
+            # ScraperAPI with JavaScript rendering to get the full page
+            api_url = "http://api.scraperapi.com"
+            params = {
+                'api_key': api_key,
+                'url': target_url,
+                'ultra_premium': 'true',
+                'render': 'true',  # Enable JavaScript rendering
+                'wait': 3,         # Wait 3 seconds for page to load
+                'country_code': 'us',
+            }
+            
+            logger.info(f"🔧 ScraperAPI token extraction from: {target_url}")
+            response = requests.get(api_url, params=params, timeout=60)
+            
+            if response.status_code == 200:
+                page_content = response.text
+                
+                # Look for the token in page content or scripts
+                # The token might be in JavaScript variables or API calls
+                token_patterns = [
+                    r'x-kpsdk-ct["\']?\s*[:=]\s*["\']([^"\']+)["\']',
+                    r'kpsdk["\']?\s*[:=]\s*["\']([^"\']+)["\']',
+                    r'token["\']?\s*[:=]\s*["\']([A-Za-z0-9]{200,})["\']',
+                ]
+                
+                for pattern in token_patterns:
+                    matches = re.findall(pattern, page_content, re.IGNORECASE)
+                    if matches:
+                        token = matches[0]
+                        logger.info(f"✅ Token extracted via ScraperAPI: {token[:50]}...")
+                        return token
+                
+                # If no token found in content, try to simulate the pagination click
+                # that generates the token (this might require additional ScraperAPI calls)
+                logger.warning("⚠️ Token not found in page content, may need additional extraction logic")
+                return None
+                
+            else:
+                logger.error(f"❌ ScraperAPI token extraction failed: {response.status_code}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"❌ ScraperAPI token extraction error: {e}")
+            return None
 
     def _get_locations_config(self, site_type: str = 'main') -> List[Dict[str, Any]]:
         with open('config/locations.json', 'r') as f:
