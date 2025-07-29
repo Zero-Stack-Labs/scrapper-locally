@@ -205,6 +205,7 @@ class FootlockerService:
             logger.info("🔐 Extrayendo token de seguridad una sola vez para todo el sitio...")
             first_location = locations[0]
             x_kpsdk_ct = self._get_dynamic_header(base_url, first_location['store_id'])
+            x_kpsdk_ct = "02OzXAYIPvLByDPH2P3vfkpM3yR7EFQ18HCMnYRcYhx3G3L4zBnfleWC8onXFkuMJoENiwOdptW7aK9YAQzDe51nwgfBIhNgoi2mq6GbnWtqmcPPqIQws80EOFypoPT1sSHcno27STFq2CkemFzsKYhtPgBy3chQyV3CfX4H54"
 
             if not x_kpsdk_ct:
                 logger.error("❌ No se pudo obtener el token de seguridad. Abortando scraping.")
