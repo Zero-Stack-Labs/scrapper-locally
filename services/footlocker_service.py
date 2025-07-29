@@ -139,7 +139,7 @@ class FootlockerService:
         
         # If all ScraperAPI strategies fail, return your working token as fallback
         logger.warning("⚠️ All ScraperAPI strategies failed, using fallback token")
-        fallback_token = "09X6AAy8WA5Nw6UCrV2TtFPM3mS62jWflref6DR7aBmwnshIMLwyheAkH3Bofdm8rihKXcaKxbrc2KKEFZudRWYfUSNAtBrp98jLg3z4qKMqA2N5he11iqU0XUh3bGT1rzebgqc2eh92La18YYgAi4Hq6ZKdVMesuULsM3d"
+        fallback_token = "02OzXAYIPvLByDPH2P3vfkpM3yR7EFQ18HCMnYRcYhx3G3L4zBnfleWC8onXFkuMJoENiwOdptW7aK9YAQzDe51nwgfBIhNgoi2mq6GbnWtqmcPPqIQws80EOFypoPT1sSHcno27STFq2CkemFzsKYhtPgBy3chQyV3CfX4H54"
         logger.info(f"🔄 Using fallback token: {fallback_token[:50]}...")
         return fallback_token
     
