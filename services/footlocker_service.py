@@ -33,15 +33,10 @@ class FootlockerService:
             if store_id:
                 target_url += f"?storeID={store_id}"
 
-            if is_container and scraperapi_key:
-                # Use ScraperAPI for token extraction in container environment
-                logger.info("🌐 Using ScraperAPI for token extraction in container environment")
-                token = self._extract_token_via_scraperapi(target_url, scraperapi_key)
-            else:
-                # Use local browser extraction
-                logger.info("🏠 Using local browser for token extraction")
-                extractor = AntiDetectionExtractor(use_undetected=True, headless=is_container)
-                token = extractor.get_token(target_url=target_url)
+            # Use local browser extraction
+            logger.info("🏠 Using local browser for token extraction")
+            extractor = AntiDetectionExtractor(use_undetected=True, headless=is_container)
+            token = extractor.get_token(target_url=target_url)
 
             if token:
                 logger.info(f"✅ Security token obtained successfully for {base_url}")
