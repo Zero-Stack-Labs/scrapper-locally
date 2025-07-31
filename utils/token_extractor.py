@@ -2,6 +2,8 @@
 import time
 import json
 import random
+import os
+import platform
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
@@ -23,13 +25,30 @@ class AntiDetectionExtractor:
     def __init__(self, use_undetected=True, headless=True):
         self.use_undetected = use_undetected and UNDETECTED_AVAILABLE
         self._captured_token = None
+        headless = self._should_force_headless(headless)
         self.driver = self.setup_driver(headless=headless)
+    
+    def _should_force_headless(self, requested_headless):
+        is_windows = platform.system() == "Windows"
+        is_server = os.environ.get('SESSIONNAME', '').startswith('RDP-')
+        no_display = not os.environ.get('DISPLAY') and is_windows
+        
+        if is_windows and (is_server or no_display):
+            print("🖥️ Windows Server/No Display detected - forcing headless mode")
+            return True
+        return requested_headless
 
     def setup_driver(self, headless: bool):
         if self.use_undetected:
             print("🔧 Using undetected-chromedriver...")
             options = uc.ChromeOptions()
             options.add_argument('--incognito')
+            options.add_argument('--no-sandbox')
+            options.add_argument('--disable-dev-shm-usage')
+            options.add_argument('--disable-gpu')
+            if platform.system() == "Windows":
+                options.add_argument('--disable-software-rasterizer')
+                options.add_argument('--disable-features=VizDisplayCompositor')
             options.set_capability('goog:loggingPrefs', {'performance': 'ALL'})
             
             driver = uc.Chrome(options=options, headless=headless)
@@ -51,6 +70,9 @@ class AntiDetectionExtractor:
             options.add_argument("--no-sandbox")
             options.add_argument("--disable-dev-shm-usage")
             options.add_argument("--window-size=1920,1080")
+            if platform.system() == "Windows":
+                options.add_argument('--disable-software-rasterizer')
+                options.add_argument('--disable-features=VizDisplayCompositor')
             options.set_capability('goog:loggingPrefs', {'performance': 'ALL'})
             service = Service(ChromeDriverManager().install())
             driver = webdriver.Chrome(service=service, options=options)
