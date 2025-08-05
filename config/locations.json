@@ -29,6 +29,18 @@
       "longitude": -96.858713,
       "store_id": "0308351",
       "zipcode": "75220"
+    },
+    {
+      "latitude": 32.793834316881245,
+      "longitude": -96.68306082974944,
+      "store_id": "0308681",
+      "zipcode": "75149"
+    },
+    {
+      "latitude": 32.660781768295514,
+      "longitude": -96.87789360238133,
+      "store_id": "0325018",
+      "zipcode": "75237"
     }
   ],
   "kids": [
@@ -61,6 +73,12 @@
       "longitude": -96.773361,
       "store_id": "1648920",
       "zipcode": "75220"
+    },
+    {
+      "latitude": 32.66123346635643,
+      "longitude": -96.87753405551047,
+      "store_id": "1606864",
+      "zipcode": "75237"
     }
   ],
   "champs": [
@@ -83,16 +101,16 @@
       "zipcode": "75149"
     },
     {
-      "latitude": 32.662111,
-      "longitude": -96.879112,
-      "store_id": "1814395",
-      "zipcode": "75216"
-    },
-    {
       "latitude": 32.929714,
       "longitude": -96.820964,
       "store_id": "1814579",
       "zipcode": "75220"
+    },
+    {
+      "latitude": 32.60205562883931,
+      "longitude": -96.94147326229694,
+      "store_id": "1815009",
+      "zipcode": "75104"
     }
   ]
 }
