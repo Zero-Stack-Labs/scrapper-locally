@@ -81,6 +81,8 @@ class ScraperManager:
             except Exception as e:
                 logger.error(f"Error processing store {store_id} for task {task_id}: {e}", exc_info=True)
                 with self._lock:
+                    self.tasks[task_id]["completed_stores"] = i + 1
+                    self.tasks[task_id]["progress"] = ((i + 1) / total_stores) * 100
                     self.tasks[task_id]["results_summary"].append({
                         "success": False,
                         "store_id": store_id,

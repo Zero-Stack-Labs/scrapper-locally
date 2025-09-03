@@ -33,27 +33,41 @@ class CsvScraperService:
             
             manager = ScraperManager(output_dir)
             
-            for store in stores:
-                location = Location(
-                    zipcode=store['zipcode'],
-                    lat=store['lat'],
-                    lng=store['lng']
-                )
-                locations = [location.dict()]
-                
-                if self.scraper_thread_pool:
-                    loop = asyncio.get_event_loop()
-                    await loop.run_in_executor(
-                        self.scraper_thread_pool,
-                        manager.perform_scraping_task,
-                        task_id, locations, scraper_params, store['store_id'], store['store_name']
-                    )
-                else:
-                    manager.perform_scraping_task(task_id, locations, scraper_params, store['store_id'], store['store_name'])
-                
-                logger.info(f"Completed scraping for store {store['store_id']}: {store['store_name']}")
+            successful_stores = 0
+            failed_stores = 0
             
-            logger.info(f"CSV scraping completed for all {len(stores)} stores from {csv_name}")
+            for store in stores:
+                try:
+                    location = Location(
+                        zipcode=store['zipcode'],
+                        lat=store['lat'],
+                        lng=store['lng']
+                    )
+                    locations = [location.dict()]
+                    
+                    logger.info(f"Starting scraping for store {store['store_id']}: {store['store_name']}")
+                    
+                    store_task_id = manager.start_scraping_task(locations, scraper_params, store['store_id'], store['store_name'])
+                    
+                    if self.scraper_thread_pool:
+                        loop = asyncio.get_event_loop()
+                        await loop.run_in_executor(
+                            self.scraper_thread_pool,
+                            manager.perform_scraping_task,
+                            store_task_id, locations, scraper_params, store['store_id'], store['store_name']
+                        )
+                    else:
+                        manager.perform_scraping_task(store_task_id, locations, scraper_params, store['store_id'], store['store_name'])
+                    
+                    successful_stores += 1
+                    logger.info(f"✅ Completed scraping for store {store['store_id']}: {store['store_name']}")
+                    
+                except Exception as e:
+                    failed_stores += 1
+                    logger.error(f"❌ Failed scraping for store {store['store_id']}: {store['store_name']} - Error: {str(e)}", exc_info=True)
+                    logger.info(f"Continuing to next store...")
+            
+            logger.info(f"CSV scraping completed: {successful_stores} successful, {failed_stores} failed out of {len(stores)} total stores from {csv_name}.csv")
             
         except FileNotFoundError as e:
             logger.error(f"CSV file not found: {str(e)}")
