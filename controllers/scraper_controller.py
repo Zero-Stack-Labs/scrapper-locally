@@ -1,7 +1,9 @@
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pathlib import Path
 from managers.scraper_manager import ScraperManager
-from api_requests.scrape_request import ScrapeRequest
+from api_requests.scrape_request import ScrapeRequest, Location
+from api_requests.csv_scrape_request import CsvScrapeRequest
+from services.csv_scraper_service import CsvScraperService
 from utils.logging_config import get_logger
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
@@ -13,7 +15,9 @@ class ScraperController:
     def __init__(self, scraper_thread_pool: ThreadPoolExecutor = None):
         self.router = APIRouter()
         self.scraper_thread_pool = scraper_thread_pool
+        self.csv_scraper_service = CsvScraperService(scraper_thread_pool)
         self.router.add_api_route("/api/scrapper-locally/scrape", self.start_scrape, methods=["POST"])
+        self.router.add_api_route("/api/scrapper-locally/scrape-csv", self.start_csv_scrape, methods=["POST"])
     
     async def start_scrape(self, request: ScrapeRequest, background_tasks: BackgroundTasks):
         logger.info(f"Starting scraping for {len(request.locations)} stores")
@@ -57,4 +61,36 @@ class ScraperController:
             "task_id": task_id,
             "status": "started",
             "message": "Scraping process initiated successfully",
+        }
+    
+    async def start_csv_scrape(self, request: CsvScrapeRequest, background_tasks: BackgroundTasks):
+        logger.info(f"Starting CSV-based scraping for {request.csv_name}.csv")
+        
+        scraper_params = {
+            "page_delay": request.page_delay,
+            "max_product_workers": request.max_product_workers,
+            "max_page_workers": request.max_page_workers,
+            "save_every": request.save_every,
+            "max_pages": request.max_pages
+        }
+        
+        task_id = self.csv_scraper_service.start_csv_scraping_task(
+            request.csv_name, 
+            request.output_dir, 
+            scraper_params
+        )
+        
+        background_tasks.add_task(
+            self.csv_scraper_service.process_csv_stores,
+            task_id,
+            request.csv_name,
+            request.output_dir,
+            scraper_params
+        )
+        
+        return {
+            "task_id": task_id,
+            "csv_name": request.csv_name,
+            "status": "started",
+            "message": f"CSV-based scraping process initiated for {request.csv_name}.csv",
         }
