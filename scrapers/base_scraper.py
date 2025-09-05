@@ -1,13 +1,14 @@
 import requests
-from typing import Optional
+from typing import Optional, Dict
 import logging
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+from config.proxy_config import ProxyConfig
 
 logger = logging.getLogger(__name__)
 
 class BaseScraper:
-    def __init__(self):
+    def __init__(self, use_proxy: bool = True):
         self.session = requests.Session()
         
         retry_strategy = Retry(
@@ -17,8 +18,8 @@ class BaseScraper:
         )
         
         adapter = HTTPAdapter(
-            pool_connections=100,
-            pool_maxsize=300,
+            pool_connections=2000,
+            pool_maxsize=4000,
             max_retries=retry_strategy,
             pool_block=False
         )
@@ -28,6 +29,8 @@ class BaseScraper:
         
         self.base_url = "https://www.locally.com"
         self.store_id: Optional[str] = None
+        self.use_proxy = use_proxy
+        
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
             'Accept-Language': 'en-US,en;q=0.9',
@@ -41,6 +44,36 @@ class BaseScraper:
 
     def set_headers(self, headers: dict):
         self.headers.update(headers)
+    
+    def _get_random_proxy(self) -> Optional[Dict[str, str]]:
+        if not self.use_proxy:
+            return None
+        
+        try:
+            proxy_config = ProxyConfig.get_random_oxylabs_config()
+            
+            endpoint = proxy_config.get('endpoint')
+            username = proxy_config.get('username')
+            password = proxy_config.get('password')
+            
+            if not all([endpoint, username, password]):
+                logger.warning("Configuración de proxy incompleta para este request.")
+                return None
+            
+            proxies = {
+                'http': f'http://{username}:{password}@{endpoint}',
+                'https': f'http://{username}:{password}@{endpoint}'
+            }
+            
+            return proxies
+            
+        except Exception as e:
+            logger.error(f"Error obteniendo proxy aleatorio: {e}")
+            return None
+    
+    def disable_proxy(self):
+        self.use_proxy = False
+        logger.info("Proxy deshabilitado")
 
     def make_request(self, url: str, method: str = 'GET', **kwargs) -> Optional[requests.Response]:
         """
@@ -59,13 +92,21 @@ class BaseScraper:
             if self.cookies:
                 self.session.cookies.update(self.cookies)
             
+            # Add proxy configuration if enabled (get random proxy for each request)
+            request_kwargs = kwargs.copy()
+            if self.use_proxy:
+                proxies = self._get_random_proxy()
+                if proxies:
+                    request_kwargs['proxies'] = proxies
+                    logger.debug(f"Usando proxy para request a: {url}")
+            
             # Make the request
             response = self.session.request(
                 method=method,
                 url=url,
                 headers=self.headers,
                 timeout=30,
-                **kwargs
+                **request_kwargs
             )
             
             # Update cookies from response

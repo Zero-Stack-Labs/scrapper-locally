@@ -11,6 +11,9 @@ logger = get_logger(__name__)
 
 class PageScraper(BaseScraper):
     
+    def __init__(self):
+        super().__init__(use_proxy=True)
+    
     def scrape_page(self, page: int) -> List[Product]:
         """Scrape products from a specific page."""
         url = f"https://www.locally.com/search/all/activities/depts?store={self.store_id}&sort=pop&page={page}"
