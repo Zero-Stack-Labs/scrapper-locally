@@ -13,3 +13,4 @@ python-dotenv>=1.0.0
 undetected-chromedriver==3.5.5
 psutil==5.9.8
 webdriver_manager==4.0.2
+aiohttp>=3.8.0
