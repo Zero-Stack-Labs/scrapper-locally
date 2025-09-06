@@ -1,5 +1,6 @@
 import requests
-from typing import Optional
+import os
+from typing import Optional, Dict
 import logging
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -7,7 +8,7 @@ from urllib3.util.retry import Retry
 logger = logging.getLogger(__name__)
 
 class BaseScraper:
-    def __init__(self):
+    def __init__(self, use_proxy: bool = True):
         self.session = requests.Session()
         
         retry_strategy = Retry(
@@ -17,8 +18,8 @@ class BaseScraper:
         )
         
         adapter = HTTPAdapter(
-            pool_connections=100,
-            pool_maxsize=300,
+            pool_connections=2000,
+            pool_maxsize=4000,
             max_retries=retry_strategy,
             pool_block=False
         )
@@ -28,6 +29,9 @@ class BaseScraper:
         
         self.base_url = "https://www.locally.com"
         self.store_id: Optional[str] = None
+        self.use_proxy = use_proxy
+        self._cached_proxy = None
+        
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
             'Accept-Language': 'en-US,en;q=0.9',
@@ -41,6 +45,31 @@ class BaseScraper:
 
     def set_headers(self, headers: dict):
         self.headers.update(headers)
+    
+    def _get_proxy(self) -> Optional[Dict[str, str]]:
+        if not self.use_proxy:
+            return None
+        
+        if self._cached_proxy:
+            return self._cached_proxy
+        
+        username = os.getenv('OXYLABS_DATACENTER_USERNAME')
+        password = os.getenv('OXYLABS_DATACENTER_PASSWORD')
+        
+        if not all([username, password]):
+            logger.warning("Configuración de proxy incompleta.")
+            return None
+        
+        self._cached_proxy = {
+            'http': f'http://{username}:{password}@dc.oxylabs.io:8000',
+            'https': f'http://{username}:{password}@dc.oxylabs.io:8000'
+        }
+        
+        return self._cached_proxy
+    
+    def disable_proxy(self):
+        self.use_proxy = False
+        logger.info("Proxy deshabilitado")
 
     def make_request(self, url: str, method: str = 'GET', **kwargs) -> Optional[requests.Response]:
         """
@@ -55,9 +84,12 @@ class BaseScraper:
             Response object or None if failed
         """
         try:
-            # Use stored cookies if available
-            if self.cookies:
-                self.session.cookies.update(self.cookies)
+            # Add proxy configuration if enabled
+            request_kwargs = kwargs.copy()
+            if self.use_proxy:
+                proxies = self._get_proxy()
+                if proxies:
+                    request_kwargs['proxies'] = proxies
             
             # Make the request
             response = self.session.request(
@@ -65,13 +97,14 @@ class BaseScraper:
                 url=url,
                 headers=self.headers,
                 timeout=30,
-                **kwargs
+                **request_kwargs
             )
             
-            # Update cookies from response
-            self.cookies.update(self.session.cookies.get_dict())
+            # Update cookies only if response has new cookies
+            response_cookies = self.session.cookies.get_dict()
+            if response_cookies:
+                self.cookies.update(response_cookies)
             
-            logger.debug(f"Request to {url}: {response.status_code}")
             return response
             
         except requests.RequestException as e:
@@ -94,14 +127,22 @@ class BaseScraper:
         temp_headers['accept'] = '*/*'
 
         try:
-            response = self.session.get(url, headers=temp_headers, timeout=15)
+            # Add proxy if enabled
+            request_kwargs = {}
+            if self.use_proxy:
+                proxies = self._get_proxy()
+                if proxies:
+                    request_kwargs['proxies'] = proxies
+            
+            response = self.session.get(url, headers=temp_headers, timeout=30, **request_kwargs)
             
             if response.status_code == 200:
-                self.cookies.update(self.session.cookies.get_dict())
-                logger.debug(f"Location initialized for lat={lat}, lng={lng}")
+                response_cookies = self.session.cookies.get_dict()
+                if response_cookies:
+                    self.cookies.update(response_cookies)
                 return True
             else:
-                logger.error(f"Failed to initialize location. Status: {response.status_code}. URL: {url}")
+                logger.error(f"Failed to initialize location. Status: {response.status_code}")
                 return False
         except requests.RequestException as e:
             logger.error(f"Exception during location initialization: {e}")

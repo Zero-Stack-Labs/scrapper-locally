@@ -13,8 +13,8 @@ logger = get_logger(__name__)
 
 class ProductScraper(BaseScraper):
     
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self):
+        super().__init__(use_proxy=True)
     
     def get_product_details_from_url(self, product_url: str) -> Optional[Product]:
         if not product_url:
@@ -585,7 +585,7 @@ class ProductScraper(BaseScraper):
 
 
     def get_product_details_batch(self, product_urls: List[str], max_workers: int = 5) -> List[Product]:
-        pool_size = 300
+        pool_size = 4000
         max_safe_workers = int(pool_size * 0.8)
         max_workers = min(max_workers, max_safe_workers)
         import concurrent.futures
